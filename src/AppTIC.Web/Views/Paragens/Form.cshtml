@@ -1,0 +1,43 @@
+@model Paragem
+@{
+    ViewData["Title"] = Model.Id == 0 ? "Nova paragem" : "Editar paragem";
+    string Coord(decimal? v) => v?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "";
+}
+<div class="page-header"><h1>@ViewData["Title"]</h1></div>
+
+<form asp-action="Save" method="post" class="card card-form">
+    <div class="card-body">
+        <input type="hidden" asp-for="Id" />
+        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+        <div class="row g-3">
+            <div class="col-md-3">
+                <label asp-for="Codigo" class="form-label"></label>
+                <input asp-for="Codigo" class="form-control" />
+                <span asp-validation-for="Codigo" class="text-danger small"></span>
+            </div>
+            <div class="col-md-9">
+                <label asp-for="Nome" class="form-label"></label>
+                <input asp-for="Nome" class="form-control" />
+                <span asp-validation-for="Nome" class="text-danger small"></span>
+            </div>
+            <div class="col-md-3">
+                <label asp-for="Latitude" class="form-label"></label>
+                <input name="Latitude" id="Latitude" value="@Coord(Model.Latitude)" class="form-control" inputmode="decimal" placeholder="41.148967" />
+                <span asp-validation-for="Latitude" class="text-danger small"></span>
+            </div>
+            <div class="col-md-3">
+                <label asp-for="Longitude" class="form-label"></label>
+                <input name="Longitude" id="Longitude" value="@Coord(Model.Longitude)" class="form-control" inputmode="decimal" placeholder="-8.585542" />
+                <span asp-validation-for="Longitude" class="text-danger small"></span>
+            </div>
+            <div class="col-12">
+                <label asp-for="Comentarios" class="form-label"></label>
+                <textarea asp-for="Comentarios" class="form-control" rows="3"></textarea>
+            </div>
+        </div>
+    </div>
+    <div class="card-footer d-flex gap-2">
+        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> Guardar</button>
+        <a asp-action="Index" class="btn btn-outline-secondary">Cancelar</a>
+    </div>
+</form>

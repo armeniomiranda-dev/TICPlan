@@ -1,0 +1,36 @@
+@model List<CirculacaoRow>
+@{
+    ViewData["Title"] = "Circulações";
+    var isAdmin = User.IsInRole(Roles.Admin);
+}
+<div class="page-header">
+    <h1>Circulações</h1>
+    <a class="btn btn-primary" asp-action="Create"><i class="bi bi-plus-lg"></i> Nova circulação</a>
+</div>
+
+<partial name="_GridActions" model="@("Circulacoes")" />
+<script id="viagemTemplate" type="text/x-template">
+    <a href="@Url.Action("Details")/${Id}" class="fw-semibold">${ViagemId}</a>
+</script>
+
+<ejs-grid id="grid" dataSource="@Model" allowPaging="true" allowSorting="true" allowFiltering="true" allowExcelExport="true"
+          allowResizing="true" toolbar="@(new List<string> { "Search", "ExcelExport" })" toolbarClick="appTic.gridToolbarClick">
+    <e-grid-filtersettings type="Excel"></e-grid-filtersettings>
+    <e-grid-pagesettings pageSize="25"></e-grid-pagesettings>
+    <e-grid-columns>
+        <e-grid-column field="ViagemId" headerText="ID viagem" template="#viagemTemplate" width="130"></e-grid-column>
+        <e-grid-column field="Operador" headerText="Operador" width="140"></e-grid-column>
+        <e-grid-column field="LinhaId" headerText="Linha" width="90"></e-grid-column>
+        <e-grid-column field="DesignacaoLinha" headerText="Designação da linha" width="200"></e-grid-column>
+        <e-grid-column field="Origem" headerText="Origem" width="150"></e-grid-column>
+        <e-grid-column field="Destino" headerText="Destino" width="150"></e-grid-column>
+        <e-grid-column field="Chegada" headerText="Chegada TIC" width="100" textAlign="Center"></e-grid-column>
+        <e-grid-column field="Partida" headerText="Partida TIC" width="100" textAlign="Center"></e-grid-column>
+        <e-grid-column field="NumDias" headerText="Dias" width="80" textAlign="Right"></e-grid-column>
+        <e-grid-column field="Primeiro" headerText="De" type="date" format="dd/MM/yyyy" width="110"></e-grid-column>
+        <e-grid-column field="Ultimo" headerText="Até" type="date" format="dd/MM/yyyy" width="110"></e-grid-column>
+        <e-grid-column field="AutorizacaoValidade" headerText="Validade aut." type="date" format="dd/MM/yyyy" width="120"></e-grid-column>
+        <e-grid-column field="Dono" headerText="Utilizador" visible="@isAdmin" width="180"></e-grid-column>
+        <e-grid-column headerText="" template="#acoesTemplate" width="100" allowFiltering="false" allowSorting="false"></e-grid-column>
+    </e-grid-columns>
+</ejs-grid>

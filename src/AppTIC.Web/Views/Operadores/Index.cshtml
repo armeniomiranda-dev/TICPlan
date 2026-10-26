@@ -1,0 +1,31 @@
+@model List<OperadorRow>
+@{
+    ViewData["Title"] = "Operadores";
+    var isAdmin = User.IsInRole(Roles.Admin);
+}
+<div class="page-header">
+    <h1>Operadores</h1>
+    <a class="btn btn-primary" asp-action="Create"><i class="bi bi-plus-lg"></i> Novo operador</a>
+</div>
+
+<partial name="_GridActions" model="@("Operadores")" />
+<script id="circTemplate" type="text/x-template">
+    <a href="@Url.Action("Index", "Circulacoes")?operadorId=${Id}">${NumCirculacoes}</a>
+</script>
+
+<ejs-grid id="grid" dataSource="@Model" allowPaging="true" allowSorting="true" allowFiltering="true" allowExcelExport="true"
+          toolbar="@(new List<string> { "Search", "ExcelExport" })" toolbarClick="appTic.gridToolbarClick">
+    <e-grid-filtersettings type="Excel"></e-grid-filtersettings>
+    <e-grid-pagesettings pageSize="20"></e-grid-pagesettings>
+    <e-grid-columns>
+        <e-grid-column field="Nif" headerText="NIF" width="110"></e-grid-column>
+        <e-grid-column field="Designacao" headerText="Designação" width="240"></e-grid-column>
+        <e-grid-column field="Abreviatura" headerText="Abreviatura" width="120"></e-grid-column>
+        <e-grid-column field="Alvara" headerText="Alvará" width="140"></e-grid-column>
+        <e-grid-column field="AlvaraValidade" headerText="Validade alvará" type="date" format="dd/MM/yyyy" width="130"></e-grid-column>
+        <e-grid-column field="Ambito" headerText="Âmbito" width="120"></e-grid-column>
+        <e-grid-column field="NumCirculacoes" headerText="Circulações" template="#circTemplate" textAlign="Right" width="110"></e-grid-column>
+        <e-grid-column field="Dono" headerText="Utilizador" visible="@isAdmin" width="180"></e-grid-column>
+        <e-grid-column headerText="" template="#acoesTemplate" width="100" allowFiltering="false" allowSorting="false"></e-grid-column>
+    </e-grid-columns>
+</ejs-grid>

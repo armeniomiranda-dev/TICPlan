@@ -1,0 +1,46 @@
+@{
+    ViewData["Title"] = "Calendário";
+    var operadores = (List<LookupItem>)ViewBag.Operadores;
+}
+<div class="page-header">
+    <h1>Calendário de circulações no TIC</h1>
+    <div style="min-width: 260px">
+        <ejs-dropdownlist id="filtroOperador" dataSource="@operadores" placeholder="Todos os operadores" showClearButton="true"
+                          allowFiltering="true" filterType="Contains" change="filtrar">
+            <e-dropdownlist-fields text="Text" value="Value"></e-dropdownlist-fields>
+        </ejs-dropdownlist>
+    </div>
+</div>
+<p class="small text-muted"><span class="badge" style="background:#0d6efd">P</span> partida do TIC &nbsp; <span class="badge" style="background:#6f42c1">C</span> chegada ao TIC (sem partida)</p>
+<div id="calendario"></div>
+
+@section Scripts {
+    <script src="~/lib/fullcalendar/index.global.min.js"></script>
+    <script src="~/lib/fullcalendar/locales/pt.global.min.js"></script>
+    <script>
+        let calendar, operadorId = null;
+        document.addEventListener('DOMContentLoaded', function () {
+            calendar = new FullCalendar.Calendar(document.getElementById('calendario'), {
+                locale: 'pt',
+                initialView: 'timeGridWeek',
+                height: 'auto',
+                slotMinTime: '00:00:00',
+                scrollTime: '06:00:00',
+                nowIndicator: true,
+                defaultTimedEventDuration: '00:15',
+                dayMaxEvents: 6,
+                headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek' },
+                events: function (info, success, failure) {
+                    const q = new URLSearchParams({ start: info.startStr.substring(0, 10), end: info.endStr.substring(0, 10) });
+                    if (operadorId) q.set('operadorId', operadorId);
+                    fetch('@Url.Action("Eventos")?' + q).then(r => r.json()).then(success).catch(failure);
+                }
+            });
+            calendar.render();
+        });
+        function filtrar(args) {
+            operadorId = args.value;
+            calendar.refetchEvents();
+        }
+    </script>
+}

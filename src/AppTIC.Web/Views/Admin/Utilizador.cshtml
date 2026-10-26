@@ -1,0 +1,47 @@
+@model UtilizadorViewModel
+@{
+    ViewData["Title"] = Model.Id is null ? "Novo utilizador" : "Editar utilizador";
+    var perfis = Roles.Todos.Select(r => new LookupItem(r, r)).ToList();
+}
+<div class="page-header"><h1>@ViewData["Title"]</h1></div>
+
+<form asp-action="Guardar" method="post" class="card card-form" style="max-width: 760px">
+    <div class="card-body">
+        <input type="hidden" asp-for="Id" />
+        <div asp-validation-summary="All" class="text-danger"></div>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label asp-for="Email" class="form-label"></label>
+                <input asp-for="Email" class="form-control" autocomplete="off" />
+            </div>
+            <div class="col-md-6">
+                <label asp-for="NomeCompleto" class="form-label"></label>
+                <input asp-for="NomeCompleto" class="form-control" />
+            </div>
+            <div class="col-md-6">
+                <label asp-for="Entidade" class="form-label"></label>
+                <input asp-for="Entidade" class="form-control" />
+            </div>
+            <div class="col-md-3">
+                <label asp-for="Perfil" class="form-label"></label>
+                <ejs-dropdownlist id="Perfil" name="Perfil" dataSource="@perfis" value="@Model.Perfil">
+                    <e-dropdownlist-fields text="Text" value="Value"></e-dropdownlist-fields>
+                </ejs-dropdownlist>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <ejs-checkbox id="Ativo" name="Ativo" value="true" checked="@Model.Ativo" label="Ativo"></ejs-checkbox>
+                <input type="hidden" name="Ativo" value="false" />
+            </div>
+            <div class="col-md-6">
+                <label asp-for="Password" class="form-label">@(Model.Id is null ? "Palavra-passe inicial" : "Nova palavra-passe (opcional)")</label>
+                <input asp-for="Password" class="form-control" autocomplete="new-password" />
+                <div class="form-text">Mínimo 8 caracteres, com maiúscula, minúscula e algarismo.</div>
+            </div>
+        </div>
+        <p class="form-text mt-3 mb-0">Perfil <strong>Admin</strong>: vê e edita os dados de todos os logins. Perfil <strong>Utilizador</strong>: vê apenas os seus próprios dados e feeds.</p>
+    </div>
+    <div class="card-footer d-flex gap-2">
+        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> Guardar</button>
+        <a asp-action="Utilizadores" class="btn btn-outline-secondary">Cancelar</a>
+    </div>
+</form>

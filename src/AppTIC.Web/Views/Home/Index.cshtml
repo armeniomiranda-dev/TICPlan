@@ -1,0 +1,72 @@
+@{
+    ViewData["Title"] = "Início";
+    var alvaras = (List<(int Id, string Nome, DateOnly Data)>)ViewBag.AlvarasAExpirar;
+    var autorizacoes = (List<(int Id, string Nome, DateOnly Data)>)ViewBag.AutorizacoesAExpirar;
+    var feeds = (List<GtfsFeed>)ViewBag.UltimosFeeds;
+    var hoje = DateOnly.FromDateTime(DateTime.Today);
+    string Classe(DateOnly d) => d < hoje ? "text-danger fw-semibold" : "text-warning-emphasis";
+}
+<div class="page-header">
+    <h1>Início @(User.IsInRole(Roles.Admin) ? "· todos os logins" : "")</h1>
+</div>
+
+<div class="row g-3 mb-4">
+    @foreach (var (titulo, valor, icone, controller) in new[] {
+        ("Operadores", (int)ViewBag.NumOperadores, "building", "Operadores"),
+        ("Paragens", (int)ViewBag.NumParagens, "geo-alt", "Paragens"),
+        ("Circulações", (int)ViewBag.NumCirculacoes, "bus-front", "Circulacoes"),
+        ("Circulações hoje", (int)ViewBag.NumHoje, "calendar-day", "Calendario"),
+        ("Feeds GTFS", (int)ViewBag.NumFeeds, "file-earmark-zip", "GtfsFeeds") })
+    {
+        <div class="col-6 col-md-4 col-xl">
+            <a class="card stat-card text-decoration-none h-100" asp-controller="@controller" asp-action="Index">
+                <div class="card-body">
+                    <div class="text-muted small"><i class="bi bi-@icone"></i> @titulo</div>
+                    <div class="display-6">@valor</div>
+                </div>
+            </a>
+        </div>
+    }
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-4">
+        <div class="card h-100">
+            <div class="card-header">Alvarás a expirar (60 dias)</div>
+            <ul class="list-group list-group-flush">
+                @foreach (var a in alvaras)
+                {
+                    <li class="list-group-item d-flex justify-content-between"><a asp-controller="Operadores" asp-action="Edit" asp-route-id="@a.Id">@a.Nome</a><span class="@Classe(a.Data)">@a.Data.ToString("dd/MM/yyyy")</span></li>
+                }
+                @if (alvaras.Count == 0) { <li class="list-group-item text-muted small">Nenhum.</li> }
+            </ul>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card h-100">
+            <div class="card-header">Autorizações de serviço a expirar (60 dias)</div>
+            <ul class="list-group list-group-flush">
+                @foreach (var a in autorizacoes)
+                {
+                    <li class="list-group-item d-flex justify-content-between"><a asp-controller="Circulacoes" asp-action="Details" asp-route-id="@a.Id">@a.Nome</a><span class="@Classe(a.Data)">@a.Data.ToString("dd/MM/yyyy")</span></li>
+                }
+                @if (autorizacoes.Count == 0) { <li class="list-group-item text-muted small">Nenhuma.</li> }
+            </ul>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between">Últimos feeds GTFS <a asp-controller="GtfsFeeds" asp-action="Upload" class="small">Carregar</a></div>
+            <ul class="list-group list-group-flush">
+                @foreach (var f in feeds)
+                {
+                    <li class="list-group-item d-flex justify-content-between">
+                        <a asp-controller="GtfsFeeds" asp-action="Details" asp-route-id="@f.Id">@f.Nome</a>
+                        <span class="badge badge-estado-@f.Estado">@f.Estado.DisplayName()</span>
+                    </li>
+                }
+                @if (feeds.Count == 0) { <li class="list-group-item text-muted small">Nenhum feed carregado.</li> }
+            </ul>
+        </div>
+    </div>
+</div>

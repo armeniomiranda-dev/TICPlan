@@ -1,0 +1,26 @@
+@model List<ParagemRow>
+@{
+    ViewData["Title"] = "Paragens";
+    var isAdmin = User.IsInRole(Roles.Admin);
+}
+<div class="page-header">
+    <h1>Paragens</h1>
+    <a class="btn btn-primary" asp-action="Create"><i class="bi bi-plus-lg"></i> Nova paragem</a>
+</div>
+
+<partial name="_GridActions" model="@("Paragens")" />
+
+<ejs-grid id="grid" dataSource="@Model" allowPaging="true" allowSorting="true" allowFiltering="true" allowExcelExport="true"
+          toolbar="@(new List<string> { "Search", "ExcelExport" })" toolbarClick="appTic.gridToolbarClick">
+    <e-grid-filtersettings type="Excel"></e-grid-filtersettings>
+    <e-grid-pagesettings pageSize="25"></e-grid-pagesettings>
+    <e-grid-columns>
+        <e-grid-column field="Codigo" headerText="Código" width="120"></e-grid-column>
+        <e-grid-column field="Nome" headerText="Nome" width="260"></e-grid-column>
+        <e-grid-column field="Latitude" headerText="Latitude" format="N6" textAlign="Right" width="120"></e-grid-column>
+        <e-grid-column field="Longitude" headerText="Longitude" format="N6" textAlign="Right" width="120"></e-grid-column>
+        <e-grid-column field="Comentarios" headerText="Comentários" width="220"></e-grid-column>
+        <e-grid-column field="Dono" headerText="Utilizador" visible="@isAdmin" width="180"></e-grid-column>
+        <e-grid-column headerText="" template="#acoesTemplate" width="100" allowFiltering="false" allowSorting="false"></e-grid-column>
+    </e-grid-columns>
+</ejs-grid>

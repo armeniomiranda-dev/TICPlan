@@ -1,0 +1,28 @@
+@model List<RegistoRow>
+@{
+    ViewData["Title"] = "Registos";
+    var isAdmin = User.IsInRole(Roles.Admin);
+    ViewData["ShowOwner"] = isAdmin;
+    var categoria = (string?)ViewBag.Categoria;
+    var dias = (int)ViewBag.Dias;
+    string[] categorias = [CategoriaRegisto.Sessao, CategoriaRegisto.Gtfs, CategoriaRegisto.Dados, CategoriaRegisto.Administracao];
+}
+<div class="page-header">
+    <h1>Registos de atividade @(isAdmin ? "(todos os logins)" : "")</h1>
+    <form method="get" class="d-flex gap-2">
+        <select name="categoria" class="form-select form-select-sm" onchange="this.form.submit()">
+            <option value="">Todas as categorias</option>
+            @foreach (var c in categorias)
+            {
+                <option value="@c" selected="@(c == categoria)">@c</option>
+            }
+        </select>
+        <select name="dias" class="form-select form-select-sm" onchange="this.form.submit()">
+            @foreach (var d in new[] { 1, 7, 30, 90, 365 })
+            {
+                <option value="@d" selected="@(d == dias)">Últimos @d dia(s)</option>
+            }
+        </select>
+    </form>
+</div>
+<partial name="_RegistosGrid" model="Model" />

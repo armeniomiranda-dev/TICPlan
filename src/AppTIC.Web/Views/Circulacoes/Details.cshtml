@@ -1,0 +1,192 @@
+@model Circulacao
+@{
+    ViewData["Title"] = $"Circulação {Model.ViagemId}";
+    var paragens = (List<LookupItem>)ViewBag.Paragens;
+    var percurso = Model.Percurso.OrderBy(p => p.Sequencia)
+        .Select(p => new { id = p.ParagemId, text = p.Paragem!.Codigo + " – " + p.Paragem.Nome }).ToList();
+    var diasSemana = new[] { (1, "Seg"), (2, "Ter"), (3, "Qua"), (4, "Qui"), (5, "Sex"), (6, "Sáb"), (0, "Dom") };
+}
+<div class="page-header">
+    <h1>Circulação <span class="text-primary">@Model.ViagemId</span></h1>
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-primary" asp-action="Edit" asp-route-id="@Model.Id"><i class="bi bi-pencil"></i> Editar</a>
+        <a class="btn btn-outline-secondary" asp-action="Index">Voltar</a>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body row g-2 small">
+        <div class="col-md-3"><span class="text-muted">Operador</span><br />@Model.Operador?.Designacao</div>
+        <div class="col-md-3"><span class="text-muted">Linha</span><br />@Model.LinhaId @Model.DesignacaoLinha</div>
+        <div class="col-md-2"><span class="text-muted">Âmbito</span><br />@Model.Ambito?.DisplayName()</div>
+        <div class="col-md-2"><span class="text-muted">Autorização</span><br />@Model.Autorizacao @(Model.AutorizacaoValidade is { } v ? $"(até {v:dd/MM/yyyy})" : "")</div>
+        <div class="col-md-2"><span class="text-muted">ID TIC</span><br />@Model.IdTic</div>
+        <div class="col-md-3"><span class="text-muted">Origem → destino</span><br />@Model.Origem?.Nome → @Model.Destino?.Nome</div>
+        <div class="col-md-3"><span class="text-muted">Chegada / partida TIC</span><br />@(Model.Chegada?.ToString("HH:mm") ?? "–") / @(Model.Partida?.ToString("HH:mm") ?? "–")</div>
+        <div class="col-md-3"><span class="text-muted">Embarque/desembarque</span><br />@(Model.TempoEmbarqueMinutos is { } m ? $"{m} min" : "–")</div>
+        <div class="col-md-3"><span class="text-muted">Declaração de capacidade</span><br />@(Model.DeclaracaoCapacidade ? "sim" : "não") @Model.IdDcp</div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-xl-8">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-calendar-check"></i> Calendário <span class="text-muted small">(clique num dia para alternar se a circulação se realiza)</span></span>
+                <span class="badge text-bg-success" id="totalDias"></span>
+            </div>
+            <div class="card-body">
+                <div class="row g-2 align-items-end mb-3">
+                    <div class="col-sm-3">
+                        <label class="form-label small mb-0">De</label>
+                        <ejs-datepicker id="diasInicio" format="dd/MM/yyyy" placeholder="dd/mm/aaaa"></ejs-datepicker>
+                    </div>
+                    <div class="col-sm-3">
+                        <label class="form-label small mb-0">Até</label>
+                        <ejs-datepicker id="diasFim" format="dd/MM/yyyy" placeholder="dd/mm/aaaa"></ejs-datepicker>
+                    </div>
+                    <div class="col-sm-6">
+                        @foreach (var (n, nome) in diasSemana)
+                        {
+                            <ejs-checkbox id="dow@(n)" label="@nome" checked="@(n is >= 1 and <= 5)" cssClass="me-2"></ejs-checkbox>
+                        }
+                    </div>
+                    <div class="col-12 d-flex gap-2">
+                        <button type="button" class="btn btn-sm btn-success" onclick="definirDias(true)"><i class="bi bi-check2-all"></i> Marcar dias</button>
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="definirDias(false)"><i class="bi bi-x-lg"></i> Desmarcar dias</button>
+                    </div>
+                </div>
+                <div id="calendarioCirculacao"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-4">
+        <div class="card h-100">
+            <div class="card-header"><i class="bi bi-signpost-2"></i> Percurso (sequência de paragens)</div>
+            <div class="card-body">
+                @if (paragens.Count == 0)
+                {
+                    <div class="alert alert-warning small">Ainda não tem paragens. <a asp-controller="Paragens" asp-action="Create">Crie paragens</a> primeiro.</div>
+                }
+                <div class="d-flex gap-2 mb-2">
+                    <div class="flex-grow-1">
+                        <ejs-dropdownlist id="novaParagem" dataSource="@paragens" placeholder="Adicionar paragem…" allowFiltering="true" filterType="Contains">
+                            <e-dropdownlist-fields text="Text" value="Value"></e-dropdownlist-fields>
+                        </ejs-dropdownlist>
+                    </div>
+                    <button type="button" class="btn btn-outline-primary" onclick="adicionarParagem()" title="Adicionar"><i class="bi bi-plus-lg"></i></button>
+                </div>
+                <ol class="list-group percurso-list mb-3" id="percurso"></ol>
+                <button type="button" class="btn btn-primary" onclick="guardarPercurso()"><i class="bi bi-check-lg"></i> Guardar percurso</button>
+                <span class="small ms-2" id="percursoEstado"></span>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/lib/fullcalendar/index.global.min.js"></script>
+    <script src="~/lib/fullcalendar/locales/pt.global.min.js"></script>
+    <script>
+        const circulacaoId = @Model.Id;
+        let calendar;
+        const diasMarcados = new Set();
+
+        document.addEventListener('DOMContentLoaded', function () {
+            calendar = new FullCalendar.Calendar(document.getElementById('calendarioCirculacao'), {
+                locale: 'pt',
+                initialView: 'dayGridMonth',
+                height: 'auto',
+                headerToolbar: { left: 'prev,next today', center: 'title', right: 'multiMonthYear,dayGridMonth' },
+                events: function (info, success, failure) {
+                    fetch(`@Url.Action("Dias")/${circulacaoId}?start=${info.startStr.substring(0, 10)}&end=${info.endStr.substring(0, 10)}`)
+                        .then(r => r.json())
+                        .then(evs => { evs.forEach(e => diasMarcados.add(e.start)); success(evs); })
+                        .catch(failure);
+                },
+                dateClick: async function (info) {
+                    const realiza = !diasMarcados.has(info.dateStr);
+                    await enviarDias(info.dateStr, info.dateStr, [], realiza);
+                }
+            });
+            calendar.render();
+        });
+
+        function toIso(d) {
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        }
+
+        async function enviarDias(inicio, fim, diasSemana, realiza) {
+            try {
+                const r = await appTic.postJson(`@Url.Action("DefinirDias")/${circulacaoId}`,
+                    { Inicio: inicio, Fim: fim, DiasSemana: diasSemana, Realiza: realiza });
+                document.getElementById('totalDias').textContent = `${r.total} dia(s)`;
+                diasMarcados.clear();
+                calendar.refetchEvents();
+            } catch (e) { alert('Erro: ' + e.message); }
+        }
+
+        function definirDias(realiza) {
+            const inicio = document.getElementById('diasInicio').ej2_instances[0].value;
+            const fim = document.getElementById('diasFim').ej2_instances[0].value;
+            if (!inicio || !fim) { alert('Indique as datas De e Até.'); return; }
+            const dias = [1, 2, 3, 4, 5, 6, 0].filter(n => document.getElementById('dow' + n).ej2_instances[0].checked);
+            if (dias.length === 0) { alert('Escolha pelo menos um dia da semana.'); return; }
+            enviarDias(toIso(inicio), toIso(fim), dias, realiza);
+        }
+
+        // ---- Percurso ----
+        let percurso = @Json.Serialize(percurso);
+
+        function renderPercurso() {
+            const ol = document.getElementById('percurso');
+            ol.innerHTML = '';
+            if (percurso.length === 0) {
+                ol.innerHTML = '<li class="list-group-item text-muted small">Sem paragens no percurso.</li>';
+                return;
+            }
+            percurso.forEach((p, i) => {
+                const li = document.createElement('li');
+                li.className = 'list-group-item';
+                li.innerHTML = `<span class="seq">${i + 1}</span><span class="flex-grow-1"></span>
+                    <button type="button" class="btn btn-sm btn-light" title="Subir" ${i === 0 ? 'disabled' : ''}><i class="bi bi-arrow-up"></i></button>
+                    <button type="button" class="btn btn-sm btn-light" title="Descer" ${i === percurso.length - 1 ? 'disabled' : ''}><i class="bi bi-arrow-down"></i></button>
+                    <button type="button" class="btn btn-sm btn-light text-danger" title="Remover"><i class="bi bi-x-lg"></i></button>`;
+                li.querySelector('.flex-grow-1').textContent = p.text;
+                const [up, down, del] = li.querySelectorAll('button');
+                up.onclick = () => mover(i, -1);
+                down.onclick = () => mover(i, 1);
+                del.onclick = () => { percurso.splice(i, 1); renderPercurso(); };
+                ol.appendChild(li);
+            });
+        }
+
+        function mover(i, delta) {
+            const [item] = percurso.splice(i, 1);
+            percurso.splice(i + delta, 0, item);
+            renderPercurso();
+        }
+
+        function adicionarParagem() {
+            const dd = document.getElementById('novaParagem').ej2_instances[0];
+            if (!dd.value) return;
+            percurso.push({ id: parseInt(dd.value), text: dd.text });
+            dd.value = null;
+            renderPercurso();
+        }
+
+        async function guardarPercurso() {
+            const estado = document.getElementById('percursoEstado');
+            try {
+                const r = await appTic.postJson(`@Url.Action("GuardarPercurso")/${circulacaoId}`, percurso.map(p => p.id));
+                estado.className = 'small ms-2 text-success';
+                estado.textContent = `Guardado (${r.total} paragens).`;
+            } catch (e) {
+                estado.className = 'small ms-2 text-danger';
+                estado.textContent = 'Erro: ' + e.message;
+            }
+        }
+
+        renderPercurso();
+    </script>
+}

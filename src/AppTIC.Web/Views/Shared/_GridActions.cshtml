@@ -1,0 +1,7 @@
+@* Template de ações (editar/eliminar) para grelhas Syncfusion. Model = nome do controller. *@
+@model string
+<script id="acoesTemplate" type="text/x-template">
+    <a class="btn btn-sm btn-outline-primary" href="@Url.Action("Edit", Model)/${Id}" title="Editar"><i class="bi bi-pencil"></i></a>
+    <button type="button" class="btn btn-sm btn-outline-danger" title="Eliminar"
+            onclick="appTic.postConfirm('@Url.Action("Delete", Model)/${Id}', 'Eliminar este registo?')"><i class="bi bi-trash"></i></button>
+</script>

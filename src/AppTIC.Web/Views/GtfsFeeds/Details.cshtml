@@ -1,0 +1,33 @@
+@model GtfsFeed
+@{
+    ViewData["Title"] = $"Feed {Model.Nome}";
+    var registos = (List<RegistoRow>)ViewBag.Registos;
+}
+<div class="page-header">
+    <h1>@Model.Nome <span class="badge badge-estado-@Model.Estado fs-6 align-middle">@Model.Estado.DisplayName()</span></h1>
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-primary" asp-action="Download" asp-route-id="@Model.Id"><i class="bi bi-download"></i> Descarregar</a>
+        <form asp-action="Revalidar" asp-route-id="@Model.Id" method="post"><button class="btn btn-outline-secondary"><i class="bi bi-arrow-repeat"></i> Validar de novo</button></form>
+        <button type="button" class="btn btn-outline-danger" onclick="appTic.postConfirm('@Url.Action("Delete", new { id = Model.Id })', 'Eliminar este feed GTFS? O ficheiro será apagado.')"><i class="bi bi-trash"></i> Eliminar</button>
+        <a class="btn btn-outline-secondary" asp-action="Index">Voltar</a>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body row g-2 small">
+        <div class="col-md-3"><span class="text-muted">Ficheiro</span><br />@Model.NomeFicheiroOriginal (@((Model.TamanhoBytes / 1024d / 1024d).ToString("N2")) MB)</div>
+        <div class="col-md-3"><span class="text-muted">Carregado</span><br />@Model.CriadoEm.ToLocalTime().ToString("dd/MM/yyyy HH:mm") por @Model.Owner?.Email</div>
+        <div class="col-md-3"><span class="text-muted">Validade do feed</span><br />@(Model.DataInicio?.ToString("dd/MM/yyyy") ?? "?") – @(Model.DataFim?.ToString("dd/MM/yyyy") ?? "?")</div>
+        <div class="col-md-3"><span class="text-muted">Editor / versão</span><br />@Model.Editor @Model.Versao</div>
+        <div class="col-md-12"><span class="text-muted">Conteúdo</span><br />
+            @Model.NumAgencias agência(s) · @Model.NumParagens paragens · @Model.NumRotas rotas · @Model.NumViagens viagens · @Model.NumHorarios horários (stop_times)</div>
+        @if (!string.IsNullOrWhiteSpace(Model.Descricao))
+        {
+            <div class="col-12"><span class="text-muted">Descrição</span><br />@Model.Descricao</div>
+        }
+        <div class="col-12 text-muted">SHA-256 <code>@Model.Sha256</code></div>
+    </div>
+</div>
+
+<h2 class="h5">Registo do feed</h2>
+<partial name="_RegistosGrid" model="registos" />

@@ -1,0 +1,33 @@
+@model List<UtilizadorRow>
+@{ ViewData["Title"] = "Utilizadores"; }
+<div class="page-header">
+    <h1>Utilizadores</h1>
+    <a class="btn btn-primary" asp-action="Criar"><i class="bi bi-person-plus"></i> Novo utilizador</a>
+</div>
+
+<script id="userAcoesTemplate" type="text/x-template">
+    <a class="btn btn-sm btn-outline-primary" href="@Url.Action("Editar")/${Id}" title="Editar"><i class="bi bi-pencil"></i></a>
+    ${if(Bloqueado)}
+    <button type="button" class="btn btn-sm btn-outline-warning" title="Desbloquear"
+            onclick="appTic.postConfirm('@Url.Action("Desbloquear")/${Id}', 'Desbloquear este utilizador?')"><i class="bi bi-unlock"></i></button>
+    ${/if}
+</script>
+<script id="ativoTemplate" type="text/x-template">
+    ${if(Ativo)}<span class="badge text-bg-success">ativo</span>${else}<span class="badge text-bg-secondary">inativo</span>${/if}
+    ${if(Bloqueado)}<span class="badge text-bg-warning">bloqueado</span>${/if}
+</script>
+
+<ejs-grid id="grid" dataSource="@Model" allowPaging="true" allowSorting="true" allowFiltering="true"
+          toolbar="@(new List<string> { "Search" })">
+    <e-grid-filtersettings type="Excel"></e-grid-filtersettings>
+    <e-grid-pagesettings pageSize="25"></e-grid-pagesettings>
+    <e-grid-columns>
+        <e-grid-column field="Email" headerText="Email (login)" width="220"></e-grid-column>
+        <e-grid-column field="NomeCompleto" headerText="Nome" width="180"></e-grid-column>
+        <e-grid-column field="Entidade" headerText="Entidade" width="180"></e-grid-column>
+        <e-grid-column field="Perfil" headerText="Perfil" width="110"></e-grid-column>
+        <e-grid-column field="Ativo" headerText="Estado" template="#ativoTemplate" width="140"></e-grid-column>
+        <e-grid-column field="CriadoEm" headerText="Criado em" type="datetime" format="dd/MM/yyyy HH:mm" width="140"></e-grid-column>
+        <e-grid-column headerText="" template="#userAcoesTemplate" width="100" allowFiltering="false" allowSorting="false"></e-grid-column>
+    </e-grid-columns>
+</ejs-grid>

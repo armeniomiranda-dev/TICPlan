@@ -1,0 +1,54 @@
+@model Operador
+@{
+    ViewData["Title"] = Model.Id == 0 ? "Novo operador" : "Editar operador";
+    var ambitos = EnumExtensions.ToLookup<Ambito>();
+}
+<div class="page-header"><h1>@ViewData["Title"]</h1></div>
+
+<form asp-action="Save" method="post" class="card card-form">
+    <div class="card-body">
+        <input type="hidden" asp-for="Id" />
+        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+        <div class="row g-3">
+            <div class="col-md-3">
+                <label asp-for="Nif" class="form-label"></label>
+                <input asp-for="Nif" class="form-control" placeholder="5…" />
+                <span asp-validation-for="Nif" class="text-danger small"></span>
+            </div>
+            <div class="col-md-6">
+                <label asp-for="Designacao" class="form-label"></label>
+                <input asp-for="Designacao" class="form-control" placeholder="designação completa" />
+                <span asp-validation-for="Designacao" class="text-danger small"></span>
+            </div>
+            <div class="col-md-3">
+                <label asp-for="Abreviatura" class="form-label"></label>
+                <input asp-for="Abreviatura" class="form-control" />
+            </div>
+            <div class="col-md-4">
+                <label asp-for="Alvara" class="form-label"></label>
+                <input asp-for="Alvara" class="form-control" />
+            </div>
+            <div class="col-md-4">
+                <label asp-for="AlvaraValidade" class="form-label"></label>
+                <ejs-datepicker id="AlvaraValidade" name="AlvaraValidade" value="@Model.AlvaraValidade.ToDateTime()" format="dd/MM/yyyy" placeholder="dd/mm/aaaa"></ejs-datepicker>
+                <span asp-validation-for="AlvaraValidade" class="text-danger small"></span>
+            </div>
+            <div class="col-md-4">
+                <label asp-for="Ambito" class="form-label"></label>
+                <ejs-dropdownlist id="Ambito" name="Ambito" dataSource="@ambitos" value="@Model.Ambito?.ToString()" placeholder="Escolha…" showClearButton="true">
+                    <e-dropdownlist-fields text="Text" value="Value"></e-dropdownlist-fields>
+                </ejs-dropdownlist>
+            </div>
+            <div class="col-12">
+                <label asp-for="Comentarios" class="form-label"></label>
+                <textarea asp-for="Comentarios" class="form-control" rows="3"></textarea>
+            </div>
+        </div>
+    </div>
+    <div class="card-footer d-flex gap-2">
+        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> Guardar</button>
+        <a asp-action="Index" class="btn btn-outline-secondary">Cancelar</a>
+    </div>
+</form>
+
+@section Scripts { <partial name="_ValidationScriptsPartial" /> }

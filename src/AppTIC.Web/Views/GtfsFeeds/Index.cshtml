@@ -1,0 +1,40 @@
+@model List<GtfsFeedRow>
+@{
+    ViewData["Title"] = "Feeds GTFS";
+    var isAdmin = User.IsInRole(Roles.Admin);
+}
+<div class="page-header">
+    <h1>Feeds GTFS</h1>
+    <a class="btn btn-primary" asp-action="Upload"><i class="bi bi-upload"></i> Carregar feed</a>
+</div>
+
+<script id="nomeTemplate" type="text/x-template">
+    <a href="@Url.Action("Details")/${Id}" class="fw-semibold">${Nome}</a>
+</script>
+<script id="estadoTemplate" type="text/x-template">
+    <span class="badge badge-estado-${Estado}">${Estado}</span>
+</script>
+<script id="feedAcoesTemplate" type="text/x-template">
+    <a class="btn btn-sm btn-outline-primary" href="@Url.Action("Download")/${Id}" title="Descarregar"><i class="bi bi-download"></i></a>
+    <button type="button" class="btn btn-sm btn-outline-danger" title="Eliminar"
+            onclick="appTic.postConfirm('@Url.Action("Delete")/${Id}', 'Eliminar este feed GTFS? O ficheiro será apagado.')"><i class="bi bi-trash"></i></button>
+</script>
+
+<ejs-grid id="grid" dataSource="@Model" allowPaging="true" allowSorting="true" allowFiltering="true" allowExcelExport="true"
+          toolbar="@(new List<string> { "Search", "ExcelExport" })" toolbarClick="appTic.gridToolbarClick">
+    <e-grid-filtersettings type="Excel"></e-grid-filtersettings>
+    <e-grid-pagesettings pageSize="20"></e-grid-pagesettings>
+    <e-grid-columns>
+        <e-grid-column field="Nome" headerText="Nome" template="#nomeTemplate" width="200"></e-grid-column>
+        <e-grid-column field="Ficheiro" headerText="Ficheiro" width="180"></e-grid-column>
+        <e-grid-column field="TamanhoMb" headerText="MB" format="N2" textAlign="Right" width="80"></e-grid-column>
+        <e-grid-column field="Estado" headerText="Estado" template="#estadoTemplate" width="140"></e-grid-column>
+        <e-grid-column field="DataInicio" headerText="Início" type="date" format="dd/MM/yyyy" width="110"></e-grid-column>
+        <e-grid-column field="DataFim" headerText="Fim" type="date" format="dd/MM/yyyy" width="110"></e-grid-column>
+        <e-grid-column field="NumRotas" headerText="Rotas" textAlign="Right" width="80"></e-grid-column>
+        <e-grid-column field="NumViagens" headerText="Viagens" textAlign="Right" width="90"></e-grid-column>
+        <e-grid-column field="CriadoEm" headerText="Carregado em" type="datetime" format="dd/MM/yyyy HH:mm" width="150"></e-grid-column>
+        <e-grid-column field="Dono" headerText="Utilizador" visible="@isAdmin" width="180"></e-grid-column>
+        <e-grid-column headerText="" template="#feedAcoesTemplate" width="100" allowFiltering="false" allowSorting="false"></e-grid-column>
+    </e-grid-columns>
+</ejs-grid>

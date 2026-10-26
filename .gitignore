@@ -1,0 +1,9 @@
+bin/
+obj/
+.vs/
+.vscode/
+.idea/
+*.user
+*.swp
+**/App_Data/
+appsettings.*.local.json
