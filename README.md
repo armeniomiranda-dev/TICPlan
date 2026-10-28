@@ -46,6 +46,8 @@ Configuração (`appsettings.json` ou variáveis de ambiente, ex. `ConnectionStr
 - `Gtfs:StoragePath` – pasta dos .zip (por omissão `App_Data/gtfs`, um subdiretório por login); `Gtfs:MaxUploadBytes`
 - `Database:MigrateOnStartup` – aplica migrações no arranque (true por omissão)
 
+Script SQL completo da base de dados: [`database/apptic_schema.sql`](database/apptic_schema.sql) (ver [`database/README.md`](database/README.md)).
+
 Migrações: `dotnet tool restore && dotnet ef migrations add <Nome> -p src/AppTIC.Web -o Data/Migrations`.
 
 ## Feeds GTFS
