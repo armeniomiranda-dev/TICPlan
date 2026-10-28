@@ -59,6 +59,9 @@ public class GtfsUploadViewModel
     [Display(Name = "Descrição")]
     public string? Descricao { get; set; }
 
+    [Required(ErrorMessage = "Escolha o operador do feed."), Display(Name = "Operador")]
+    public int? OperadorId { get; set; }
+
     [Required(ErrorMessage = "Escolha o ficheiro .zip."), Display(Name = "Ficheiro GTFS (.zip)")]
     public IFormFile? Ficheiro { get; set; }
 }

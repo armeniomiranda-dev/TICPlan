@@ -49,6 +49,7 @@ public class OperadoresController(ApplicationDbContext db, ICurrentUser currentU
         entity.Ambito = model.Ambito;
         entity.Abreviatura = model.Abreviatura;
         entity.Comentarios = model.Comentarios;
+        entity.GtfsParagensTic = string.Join(", ", Operador.SplitStopIds(model.GtfsParagensTic)) is { Length: > 0 } ids ? ids : null;
         if (model.Id == 0) db.Operadores.Add(entity);
         await db.SaveChangesAsync();
 

@@ -80,6 +80,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         {
             e.Property(x => x.Estado).HasConversion<string>().HasMaxLength(30);
             e.HasIndex(x => x.Sha256);
+            e.HasOne(x => x.Operador).WithMany(o => o.GtfsFeeds).HasForeignKey(x => x.OperadorId).OnDelete(DeleteBehavior.Restrict);
         });
 
         b.Entity<RegistoAtividade>(e =>

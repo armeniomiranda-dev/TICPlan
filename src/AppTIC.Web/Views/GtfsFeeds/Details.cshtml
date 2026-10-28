@@ -6,8 +6,12 @@
 <div class="page-header">
     <h1>@Model.Nome <span class="badge badge-estado-@Model.Estado fs-6 align-middle">@Model.Estado.DisplayName()</span></h1>
     <div class="d-flex gap-2">
-        <a class="btn btn-outline-primary" asp-action="Download" asp-route-id="@Model.Id"><i class="bi bi-download"></i> Descarregar</a>
-        <form asp-action="Revalidar" asp-route-id="@Model.Id" method="post"><button class="btn btn-outline-secondary"><i class="bi bi-arrow-repeat"></i> Validar de novo</button></form>
+        <a class="btn btn-outline-primary" asp-action="Download" asp-route-id="@Model.Id"><i class="bi bi-download"></i> Original</a>
+        @if (Model.CaminhoFiltrado is not null)
+        {
+            <a class="btn btn-primary" asp-action="DownloadTic" asp-route-id="@Model.Id"><i class="bi bi-funnel"></i> GTFS filtrado TIC</a>
+        }
+        <form asp-action="Revalidar" asp-route-id="@Model.Id" method="post"><button class="btn btn-outline-secondary"><i class="bi bi-arrow-repeat"></i> Validar e filtrar de novo</button></form>
         <button type="button" class="btn btn-outline-danger" onclick="appTic.postConfirm('@Url.Action("Delete", new { id = Model.Id })', 'Eliminar este feed GTFS? O ficheiro será apagado.')"><i class="bi bi-trash"></i> Eliminar</button>
         <a class="btn btn-outline-secondary" asp-action="Index">Voltar</a>
     </div>
@@ -15,6 +19,7 @@
 
 <div class="card mb-3">
     <div class="card-body row g-2 small">
+        <div class="col-md-3"><span class="text-muted">Operador</span><br />@(Model.Operador?.Designacao ?? "–")</div>
         <div class="col-md-3"><span class="text-muted">Ficheiro</span><br />@Model.NomeFicheiroOriginal (@((Model.TamanhoBytes / 1024d / 1024d).ToString("N2")) MB)</div>
         <div class="col-md-3"><span class="text-muted">Carregado</span><br />@Model.CriadoEm.ToLocalTime().ToString("dd/MM/yyyy HH:mm") por @Model.Owner?.Email</div>
         <div class="col-md-3"><span class="text-muted">Validade do feed</span><br />@(Model.DataInicio?.ToString("dd/MM/yyyy") ?? "?") – @(Model.DataFim?.ToString("dd/MM/yyyy") ?? "?")</div>
@@ -25,6 +30,18 @@
         {
             <div class="col-12"><span class="text-muted">Descrição</span><br />@Model.Descricao</div>
         }
+        <div class="col-md-12 border-top pt-2"><span class="text-muted">Filtragem TIC</span><br />
+            @if (Model.CaminhoFiltrado is not null)
+            {
+                <span><strong>@Model.NumViagensTic</strong> viagens passam no TIC · @Model.NumHorariosTic horários · @Model.NumRotasTic rotas · @Model.NumParagensTic paragens
+                    (@(((Model.TamanhoFiltradoBytes ?? 0) / 1024d / 1024d).ToString("N2")) MB)</span>
+            }
+            else
+            {
+                <span>Não filtrado (ver registo).</span>
+            }
+            <br /><span class="text-muted">Paragens TIC usadas (stop_id):</span> <code>@Model.ParagensTic</code>
+        </div>
         <div class="col-12 text-muted">SHA-256 <code>@Model.Sha256</code></div>
     </div>
 </div>

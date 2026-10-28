@@ -11,8 +11,8 @@ public record CirculacaoRow(int Id, string ViagemId, string Operador, string? Li
     string? Ambito, string? Origem, string? Destino, string? Chegada, string? Partida, int NumDias,
     DateTime? Primeiro, DateTime? Ultimo, DateTime? AutorizacaoValidade, string? Dono);
 
-public record GtfsFeedRow(int Id, string Nome, string Ficheiro, double TamanhoMb, string Estado,
-    DateTime? DataInicio, DateTime? DataFim, int NumRotas, int NumViagens, DateTime CriadoEm, string? Dono);
+public record GtfsFeedRow(int Id, string Nome, string? Operador, string Ficheiro, double TamanhoMb, string Estado,
+    DateTime? DataInicio, DateTime? DataFim, int NumRotas, int NumViagens, int NumViagensTic, DateTime CriadoEm, string? Dono);
 
 public record RegistoRow(long Id, DateTime Data, string Nivel, string Categoria, string Acao, string Mensagem,
     int? GtfsFeedId, string? UserName, string? Dono);

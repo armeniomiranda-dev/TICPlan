@@ -408,3 +408,91 @@ BEGIN
 END $EF$;
 COMMIT;
 
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "migration_id" = '20261028094740_GtfsOperadorTic') THEN
+    ALTER TABLE operadores ADD gtfs_paragens_tic character varying(1000);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "migration_id" = '20261028094740_GtfsOperadorTic') THEN
+    ALTER TABLE gtfs_feeds ADD caminho_filtrado character varying(500);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "migration_id" = '20261028094740_GtfsOperadorTic') THEN
+    ALTER TABLE gtfs_feeds ADD num_horarios_tic integer NOT NULL DEFAULT 0;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "migration_id" = '20261028094740_GtfsOperadorTic') THEN
+    ALTER TABLE gtfs_feeds ADD num_paragens_tic integer NOT NULL DEFAULT 0;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "migration_id" = '20261028094740_GtfsOperadorTic') THEN
+    ALTER TABLE gtfs_feeds ADD num_rotas_tic integer NOT NULL DEFAULT 0;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "migration_id" = '20261028094740_GtfsOperadorTic') THEN
+    ALTER TABLE gtfs_feeds ADD num_viagens_tic integer NOT NULL DEFAULT 0;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "migration_id" = '20261028094740_GtfsOperadorTic') THEN
+    ALTER TABLE gtfs_feeds ADD operador_id integer;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "migration_id" = '20261028094740_GtfsOperadorTic') THEN
+    ALTER TABLE gtfs_feeds ADD paragens_tic character varying(1000);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "migration_id" = '20261028094740_GtfsOperadorTic') THEN
+    ALTER TABLE gtfs_feeds ADD tamanho_filtrado_bytes bigint;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "migration_id" = '20261028094740_GtfsOperadorTic') THEN
+    CREATE INDEX ix_gtfs_feeds_operador_id ON gtfs_feeds (operador_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "migration_id" = '20261028094740_GtfsOperadorTic') THEN
+    ALTER TABLE gtfs_feeds ADD CONSTRAINT fk_gtfs_feeds_operadores_operador_id FOREIGN KEY (operador_id) REFERENCES operadores (id) ON DELETE RESTRICT;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "migration_id" = '20261028094740_GtfsOperadorTic') THEN
+    INSERT INTO "__EFMigrationsHistory" (migration_id, product_version)
+    VALUES ('20261028094740_GtfsOperadorTic', '10.0.11');
+    END IF;
+END $EF$;
+COMMIT;
+
