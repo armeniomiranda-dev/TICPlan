@@ -1,0 +1,90 @@
+@model GtfsImportPreview
+@{
+    var feed = (GtfsFeed)ViewBag.Feed;
+    var intervalo = ((DateOnly Inicio, DateOnly Fim)?)ViewBag.Intervalo;
+    ViewData["Title"] = $"Importar {feed.Nome}";
+}
+<div class="page-header">
+    <h1>Importar do GTFS <small class="text-muted fs-5">@feed.Nome · @(feed.Operador?.Abreviatura ?? feed.Operador?.Designacao)</small></h1>
+    <a class="btn btn-outline-secondary" asp-action="Details" asp-route-id="@feed.Id">Voltar</a>
+</div>
+
+<p class="text-muted small">
+    Cria ou atualiza <strong>paragens</strong> (código = <code>stop_id</code>), <strong>circulações</strong> (ID de viagem = <code>trip_id</code>)
+    com o <strong>percurso</strong> e o <strong>calendário</strong> (calendar.txt + calendar_dates.txt), a partir do GTFS filtrado TIC.
+    Nas circulações já existentes deste operador, o percurso é substituído e os dias são substituídos apenas dentro do intervalo escolhido;
+    os restantes campos (âmbito, autorização, DCP, …) não são alterados. Horas a partir das 24:00 passam para o dia seguinte.
+</p>
+
+<form method="get" asp-action="Importar" asp-route-id="@feed.Id" class="card mb-3">
+    <div class="card-body row g-2 align-items-end small">
+        <div class="col-auto"><label class="form-label" for="inicio">Dias de</label><input type="date" class="form-control form-control-sm" id="inicio" name="inicio" value="@Model.Inicio.ToString("yyyy-MM-dd")" /></div>
+        <div class="col-auto"><label class="form-label" for="fim">até</label><input type="date" class="form-control form-control-sm" id="fim" name="fim" value="@Model.Fim.ToString("yyyy-MM-dd")" /></div>
+        <div class="col-auto"><button class="btn btn-sm btn-outline-primary"><i class="bi bi-arrow-clockwise"></i> Atualizar</button></div>
+        <div class="col text-muted">
+            @if (intervalo is { } iv)
+            {
+                <span>Calendário do feed: @iv.Inicio.ToString("dd/MM/yyyy") – @iv.Fim.ToString("dd/MM/yyyy").</span>
+            }
+            <span>@Model.DiasCirculacao.ToString("N0") dias de circulação no intervalo (todas as rotas).</span>
+        </div>
+    </div>
+</form>
+
+<div class="row g-3 mb-3 small">
+    <div class="col-md-4"><div class="card"><div class="card-body">
+        <div class="text-muted">Paragens</div>
+        <strong>@Model.ParagensNovas</strong> novas · <strong>@Model.ParagensAtualizar</strong> a atualizar · @Model.ParagensIguais sem alterações
+        <div class="form-text">Só são gravadas as paragens usadas pelas rotas escolhidas.</div>
+    </div></div></div>
+    <div class="col-md-4"><div class="card"><div class="card-body">
+        <div class="text-muted">Circulações</div>
+        <strong>@Model.Rotas.Sum(r => r.Novas)</strong> novas · <strong>@Model.Rotas.Sum(r => r.Atualizar)</strong> a atualizar ·
+        <span class="@(Model.Rotas.Sum(r => r.Conflitos) > 0 ? "text-danger" : "")">@Model.Rotas.Sum(r => r.Conflitos) em conflito</span>
+    </div></div></div>
+</div>
+
+@if (Model.Conflitos.Count > 0 || Model.Avisos.Count > 0)
+{
+    <div class="alert alert-warning small">
+        <strong>Não serão importadas:</strong>
+        <ul class="mb-0">
+            @foreach (var c in Model.Conflitos.Concat(Model.Avisos)) { <li>@c</li> }
+        </ul>
+    </div>
+}
+
+<form method="post" asp-action="Importar" asp-route-id="@feed.Id" onsubmit="this.querySelector('button[type=submit]').disabled = true">
+    <input type="hidden" name="inicio" value="@Model.Inicio.ToString("yyyy-MM-dd")" />
+    <input type="hidden" name="fim" value="@Model.Fim.ToString("yyyy-MM-dd")" />
+    <div class="card">
+        <table class="table table-sm table-hover mb-0 small align-middle">
+            <thead>
+                <tr>
+                    <th style="width:2rem"><input type="checkbox" class="form-check-input" checked onchange="document.querySelectorAll('input[name=rotas]').forEach(c => c.checked = this.checked)" /></th>
+                    <th>Linha</th><th>Designação</th><th>route_id</th>
+                    <th class="text-end">Viagens</th><th class="text-end">Novas</th><th class="text-end">A atualizar</th><th class="text-end">Conflitos</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var r in Model.Rotas)
+                {
+                    <tr>
+                        <td><input type="checkbox" class="form-check-input" name="rotas" value="@r.RouteId" checked="@(r.Novas + r.Atualizar > 0)" /></td>
+                        <td>@r.Linha</td><td>@r.Designacao</td><td><code>@r.RouteId</code></td>
+                        <td class="text-end">@r.Viagens</td><td class="text-end">@r.Novas</td><td class="text-end">@r.Atualizar</td>
+                        <td class="text-end @(r.Conflitos > 0 ? "text-danger" : "")">@r.Conflitos</td>
+                    </tr>
+                }
+                @if (Model.Rotas.Count == 0)
+                {
+                    <tr><td colspan="8" class="text-muted text-center py-3">O GTFS filtrado não tem viagens que passem no TIC.</td></tr>
+                }
+            </tbody>
+        </table>
+        <div class="card-footer d-flex gap-2">
+            <button type="submit" class="btn btn-primary" @(Model.Rotas.Count == 0 ? "disabled" : "")><i class="bi bi-box-arrow-in-down"></i> Importar rotas selecionadas</button>
+            <a class="btn btn-outline-secondary" asp-action="Details" asp-route-id="@feed.Id">Cancelar</a>
+        </div>
+    </div>
+</form>

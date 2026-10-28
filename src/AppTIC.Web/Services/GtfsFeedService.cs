@@ -28,7 +28,8 @@ public class GtfsFeedService(
     ApplicationDbContext db,
     IActivityLog log,
     IOptions<GtfsOptions> options,
-    IWebHostEnvironment env)
+    IWebHostEnvironment env,
+    GtfsDbLoader dbLoader)
 {
     private static readonly string[] RequiredFiles = ["agency.txt", "stops.txt", "routes.txt", "trips.txt", "stop_times.txt"];
 
@@ -100,7 +101,37 @@ public class GtfsFeedService(
 
         await ValidateAsync(feed, ct);
         await FiltrarTicAsync(feed, ct);
+        await CarregarBdAsync(feed, ct);
         return feed;
+    }
+
+    /// <summary>Grava o conteúdo do feed original no schema "gtfs" (uma tabela por ficheiro). Substitui o que lá estiver.</summary>
+    public async Task CarregarBdAsync(GtfsFeed feed, CancellationToken ct = default)
+    {
+        if (feed.Estado == GtfsFeedEstado.Invalido)
+        {
+            await log.LogAsync(CategoriaRegisto.Gtfs, "Base de dados", "Feed inválido; não foi gravado no schema gtfs.", NivelRegisto.Aviso, feed.Id, feed.OwnerId);
+            return;
+        }
+        var inicio = DateTime.UtcNow;
+        try
+        {
+            var r = await dbLoader.CarregarAsync(feed.Id, GetFullPath(feed), ct);
+            await log.LogAsync(CategoriaRegisto.Gtfs, "Base de dados",
+                $"Feed gravado no schema gtfs em {(DateTime.UtcNow - inicio).TotalSeconds:N0} s: "
+                + string.Join(", ", r.Linhas.OrderBy(l => l.Key).Select(l => $"{l.Key} {l.Value:N0}"))
+                + $"; {r.ShapeGeoms:N0} traçados (shape_geoms).",
+                NivelRegisto.Info, feed.Id, feed.OwnerId);
+            if (r.Ignorados.Count > 0)
+                await log.LogAsync(CategoriaRegisto.Gtfs, "Base de dados",
+                    $"Ficheiros/colunas fora da referência GTFS, não gravados: {string.Join(", ", r.Ignorados.Take(30))}{(r.Ignorados.Count > 30 ? ", …" : "")}.",
+                    NivelRegisto.Aviso, feed.Id, feed.OwnerId);
+        }
+        catch (Exception ex) when (ex is InvalidDataException or IOException or CsvHelper.CsvHelperException or Npgsql.NpgsqlException or System.Text.Json.JsonException)
+        {
+            await log.LogAsync(CategoriaRegisto.Gtfs, "Base de dados", $"Feed não gravado no schema gtfs (nada foi alterado): {ex.Message}",
+                NivelRegisto.Erro, feed.Id, feed.OwnerId);
+        }
     }
 
     /// <summary>Gera o GTFS filtrado com as viagens que passam nas paragens do TIC do operador.</summary>

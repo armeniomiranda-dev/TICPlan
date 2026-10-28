@@ -10,6 +10,10 @@
         @if (Model.CaminhoFiltrado is not null)
         {
             <a class="btn btn-primary" asp-action="DownloadTic" asp-route-id="@Model.Id"><i class="bi bi-funnel"></i> GTFS filtrado TIC</a>
+            @if (Model.OperadorId is not null)
+            {
+                <a class="btn btn-success" asp-action="Importar" asp-route-id="@Model.Id"><i class="bi bi-box-arrow-in-down"></i> Importar paragens e circulações</a>
+            }
         }
         <form asp-action="Revalidar" asp-route-id="@Model.Id" method="post"><button class="btn btn-outline-secondary"><i class="bi bi-arrow-repeat"></i> Validar e filtrar de novo</button></form>
         <button type="button" class="btn btn-outline-danger" onclick="appTic.postConfirm('@Url.Action("Delete", new { id = Model.Id })', 'Eliminar este feed GTFS? O ficheiro será apagado.')"><i class="bi bi-trash"></i> Eliminar</button>
@@ -46,5 +50,75 @@
     </div>
 </div>
 
+@if (Model.Estado != GtfsFeedEstado.Invalido)
+{
+    <div class="card mb-3">
+        <div class="card-header d-flex flex-wrap align-items-center gap-3 small">
+            <strong><i class="bi bi-map"></i> Mapa</strong>
+            <div class="btn-group btn-group-sm" role="group" aria-label="Feed a mostrar">
+                @if (Model.CaminhoFiltrado is not null)
+                {
+                    <input type="radio" class="btn-check" name="mapaFonte" id="mapaTic" value="true" checked />
+                    <label class="btn btn-outline-primary" for="mapaTic">Filtrado TIC</label>
+                }
+                <input type="radio" class="btn-check" name="mapaFonte" id="mapaOriginal" value="false" @(Model.CaminhoFiltrado is null ? "checked" : "") />
+                <label class="btn btn-outline-primary" for="mapaOriginal">Original</label>
+            </div>
+            <div class="form-check form-check-inline m-0"><input class="form-check-input" type="checkbox" id="mapaShapes" checked /><label class="form-check-label" for="mapaShapes">Traçados</label></div>
+            <div class="form-check form-check-inline m-0"><input class="form-check-input" type="checkbox" id="mapaStops" checked /><label class="form-check-label" for="mapaStops">Paragens</label></div>
+            <span class="text-muted"><span class="mapa-legenda" style="background:#dc3545"></span> Paragem TIC</span>
+            <span id="mapaEstado" class="text-muted ms-auto"></span>
+        </div>
+        <div class="position-relative">
+            <div id="mapa" style="height: 520px"></div>
+            <div id="mapaPopup" class="bg-body border rounded shadow-sm small px-2 py-1" style="position:absolute; pointer-events:none; display:none; z-index:10; white-space:nowrap"></div>
+        </div>
+    </div>
+}
+
 <h2 class="h5">Registo do feed</h2>
 <partial name="_RegistosGrid" model="registos" />
+
+@section Head {
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.2.1/ol.css" />
+    <style>
+        .mapa-legenda { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: middle; }
+    </style>
+}
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/ol@10.2.1/dist/ol.js"></script>
+    <script src="~/js/gtfs-mapa.js" asp-append-version="true"></script>
+    <script>
+        (function () {
+            const el = document.getElementById('mapa');
+            if (!el) return;
+            const url = '@Url.Action("Mapa", new { id = Model.Id })';
+            const estado = document.getElementById('mapaEstado');
+            const mapa = gtfsMapa(el, document.getElementById('mapaPopup'));
+            const camada = mapa.camada();
+            const chkShapes = document.getElementById('mapaShapes');
+            const chkStops = document.getElementById('mapaStops');
+
+            async function carregar(tic) {
+                estado.textContent = 'A carregar…';
+                try {
+                    const n = await camada.carregar(url + '?tic=' + tic);
+                    estado.textContent = `${n.paragens} paragens · ${n.tracados} traçados`;
+                    mapa.ajustar();
+                } catch (e) {
+                    estado.textContent = 'Erro ao carregar o mapa: ' + e.message;
+                }
+            }
+
+            document.querySelectorAll('input[name="mapaFonte"]').forEach(r =>
+                r.addEventListener('change', () => r.checked && carregar(r.value)));
+            const visibilidade = () => camada.setVisible(chkShapes.checked, chkStops.checked);
+            chkShapes.addEventListener('change', visibilidade);
+            chkStops.addEventListener('change', visibilidade);
+
+            carregar(document.querySelector('input[name="mapaFonte"]:checked').value);
+        })();
+    </script>
+}
+

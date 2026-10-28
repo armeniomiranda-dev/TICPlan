@@ -29,6 +29,21 @@
     }
 </div>
 
+
+@if (User.IsInRole(Roles.Admin))
+{
+    <div class="card mb-4">
+        <div class="card-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
+            <span><i class="bi bi-bar-chart"></i> Ocupação do terminal <span class="text-muted small">(veículos que já chegaram e ainda não partiram, por 15 minutos)</span></span>
+            <input type="date" class="form-control form-control-sm w-auto" id="ocupacaoDia" value="@hoje.ToString("yyyy-MM-dd")" aria-label="Dia" />
+        </div>
+        <div class="card-body">
+            <div class="d-flex flex-wrap gap-4 small mb-2" id="ocupacaoResumo"></div>
+            <div id="ocupacaoGrafico" style="height:320px"></div>
+            <div class="form-text">Quando o TIC é início ou fim de viagem conta o tempo de embarque/desembarque da circulação (10 min se não estiver indicado).</div>
+        </div>
+    </div>
+}
 <div class="row g-3">
     <div class="col-lg-4">
         <div class="card h-100">
@@ -70,3 +85,58 @@
         </div>
     </div>
 </div>
+
+@section Scripts {
+    @if (User.IsInRole(Roles.Admin))
+    {
+        <script>
+            (function () {
+                ej.charts.Chart.Inject(ej.charts.ColumnSeries, ej.charts.Category, ej.charts.Tooltip);
+                const diaInput = document.getElementById('ocupacaoDia');
+                const resumo = document.getElementById('ocupacaoResumo');
+                const cor = '#0d6efd', corAgora = '#084298';
+                let dados = [];
+                let atual = -1;
+
+                const chart = new ej.charts.Chart({
+                    primaryXAxis: { valueType: 'Category', interval: 4, labelIntersectAction: 'Hide', majorGridLines: { width: 0 }, majorTickLines: { width: 0 } },
+                    primaryYAxis: { minimum: 0, labelFormat: 'n0', title: 'Veículos', lineStyle: { width: 0 }, majorTickLines: { width: 0 }, majorGridLines: { color: '#e9ecef' } },
+                    chartArea: { border: { width: 0 } },
+                    series: [{ type: 'Column', xName: 'Hora', yName: 'Veiculos', name: 'Veículos no terminal', fill: cor,
+                               columnWidth: 0.85, cornerRadius: { topLeft: 3, topRight: 3 }, dataSource: [] }],
+                    tooltip: { enable: true },
+                    tooltipRender: function (args) {
+                        const d = dados[args.point.index];
+                        const fim = dados[args.point.index + 1]?.Hora ?? '24:00';
+                        args.text = `${d.Hora}–${fim}<br/><b>${d.Veiculos}</b> veículo(s) no terminal<br/>${d.Chegadas} chegada(s) · ${d.Partidas} partida(s)`;
+                    },
+                    pointRender: function (args) { if (args.point.index === atual) args.fill = corAgora; },
+                    legendSettings: { visible: false },
+                    height: '320px'
+                }, '#ocupacaoGrafico');
+
+                async function carregar() {
+                    const dia = diaInput.value;
+                    const r = await fetch(`@Url.Action("Ocupacao")?dia=${dia}`);
+                    if (!r.ok) { resumo.textContent = 'Erro ao carregar a ocupação.'; return; }
+                    dados = await r.json();
+                    const agora = new Date();
+                    const hojeIso = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}-${String(agora.getDate()).padStart(2, '0')}`;
+                    atual = dia === hojeIso ? Math.floor((agora.getHours() * 60 + agora.getMinutes()) / 15) : -1;
+
+                    const pico = dados.reduce((m, d) => d.Veiculos > m.Veiculos ? d : m, dados[0]);
+                    const soma = k => dados.reduce((s, d) => s + d[k], 0);
+                    const item = (rotulo, valor) => `<div><span class="text-muted">${rotulo}</span><br/><span class="fs-5 fw-semibold">${valor}</span></div>`;
+                    resumo.innerHTML = (atual >= 0 ? item('Agora', `${dados[atual].Veiculos} veículo(s)`) : '')
+                        + item('Pico', pico.Veiculos > 0 ? `${pico.Veiculos} às ${pico.Hora}` : '–')
+                        + item('Chegadas', soma('Chegadas')) + item('Partidas', soma('Partidas'));
+                    chart.series[0].dataSource = dados;
+                    chart.refresh();
+                }
+
+                diaInput.addEventListener('change', carregar);
+                carregar();
+            })();
+        </script>
+    }
+}

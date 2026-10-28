@@ -123,13 +123,13 @@ public static class GtfsTicFilter
         if (!string.IsNullOrEmpty(value)) set.Add(value);
     }
 
-    private sealed class Row(Dictionary<string, int> header, string[] fields)
+    internal sealed class Row(Dictionary<string, int> header, string[] fields)
     {
         public string? Get(string column) =>
             header.TryGetValue(column, out var i) && i < fields.Length ? fields[i].Trim() : null;
     }
 
-    private static void ForEachRow(ZipArchiveEntry entry, Action<Row> action) =>
+    internal static void ForEachRow(ZipArchiveEntry entry, Action<Row> action) =>
         Read(entry, (_, row, _) => action(row));
 
     private static int Copy(ZipArchiveEntry entry, ZipArchive output, Func<Row, bool> keep, Action<Row>? onKept = null)

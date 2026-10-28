@@ -3,6 +3,7 @@ using AppTIC.Web.Infrastructure;
 using AppTIC.Web.Models.Domain;
 using AppTIC.Web.Services;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Localization;
@@ -20,6 +21,10 @@ if (!string.IsNullOrWhiteSpace(syncfusionKey))
 
 // Não codificar acentos como entidades HTML (á -> &#xE1;).
 builder.Services.AddWebEncoders(o => o.TextEncoderSettings = new TextEncoderSettings(UnicodeRanges.All));
+
+// No IIS o application pool pode não ter perfil carregado: sem pasta de chaves, as sessões perdiam-se a cada reciclagem.
+if (builder.Configuration["DataProtection:KeysPath"] is { Length: > 0 } keysPath)
+    builder.Services.AddDataProtection().SetApplicationName("AppTIC").PersistKeysToFileSystem(new DirectoryInfo(keysPath));
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, HttpCurrentUser>();
@@ -58,6 +63,9 @@ builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = maxUpload + 
 
 builder.Services.AddScoped<IActivityLog, ActivityLog>();
 builder.Services.AddScoped<GtfsFeedService>();
+builder.Services.AddScoped<GtfsDbLoader>();
+builder.Services.AddScoped<GtfsImportService>();
+builder.Services.AddScoped<OcupacaoTerminal>();
 
 // Todas as páginas exigem sessão iniciada, exceto as marcadas com [AllowAnonymous].
 builder.Services.AddControllersWithViews(o =>

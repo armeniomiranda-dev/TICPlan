@@ -3,10 +3,41 @@
     ViewData["Title"] = "Feeds GTFS";
     var isAdmin = User.IsInRole(Roles.Admin);
 }
+@{
+    var mapaFeeds = (List<object>)ViewBag.MapaFeeds;
+}
 <div class="page-header">
     <h1>Feeds GTFS</h1>
-    <a class="btn btn-primary" asp-action="Upload"><i class="bi bi-upload"></i> Carregar feed</a>
+    <div class="d-flex gap-2">
+        @if (mapaFeeds.Count > 0)
+        {
+            <button class="btn btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#mapaGeralCard" aria-expanded="false">
+                <i class="bi bi-map"></i> Mapa geral
+            </button>
+        }
+        <a class="btn btn-primary" asp-action="Upload"><i class="bi bi-upload"></i> Carregar feed</a>
+    </div>
 </div>
+
+@if (mapaFeeds.Count > 0)
+{
+    <div class="collapse mb-3" id="mapaGeralCard">
+        <div class="card">
+            <div class="card-header d-flex flex-wrap align-items-center gap-3 small">
+                <strong><i class="bi bi-map"></i> Todos os operadores <span class="text-muted fw-normal">(GTFS filtrado TIC, feed mais recente de cada)</span></strong>
+                <div id="mapaOperadores" class="d-flex flex-wrap gap-3"></div>
+                <div class="form-check form-check-inline m-0"><input class="form-check-input" type="checkbox" id="mapaShapes" checked /><label class="form-check-label" for="mapaShapes">Traçados</label></div>
+                <div class="form-check form-check-inline m-0"><input class="form-check-input" type="checkbox" id="mapaStops" checked /><label class="form-check-label" for="mapaStops">Paragens</label></div>
+                <span class="text-muted"><span class="mapa-legenda" style="background:#dc3545"></span> Paragem TIC</span>
+                <span id="mapaEstado" class="text-muted ms-auto"></span>
+            </div>
+            <div class="position-relative">
+                <div id="mapa" style="height: 560px"></div>
+                <div id="mapaPopup" class="bg-body border rounded shadow-sm small px-2 py-1" style="position:absolute; pointer-events:none; display:none; z-index:10; white-space:nowrap"></div>
+            </div>
+        </div>
+    </div>
+}
 
 <script id="nomeTemplate" type="text/x-template">
     <a href="@Url.Action("Details")/${Id}" class="fw-semibold">${Nome}</a>
@@ -40,3 +71,67 @@
         <e-grid-column headerText="" template="#feedAcoesTemplate" width="100" allowFiltering="false" allowSorting="false"></e-grid-column>
     </e-grid-columns>
 </ejs-grid>
+
+@section Head {
+    @if (mapaFeeds.Count > 0)
+    {
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.2.1/ol.css" />
+        <style>
+            .mapa-legenda { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: middle; }
+        </style>
+    }
+}
+
+@section Scripts {
+    @if (mapaFeeds.Count > 0)
+    {
+        <script src="https://cdn.jsdelivr.net/npm/ol@10.2.1/dist/ol.js"></script>
+        <script src="~/js/gtfs-mapa.js" asp-append-version="true"></script>
+        <script>
+            (function () {
+                const feeds = @Json.Serialize(mapaFeeds);
+                const url = '@Url.Action("Mapa")';
+                const cores = ['#0d6efd', '#198754', '#fd7e14', '#6f42c1', '#20c997', '#d63384', '#0dcaf0', '#6c757d', '#ffc107', '#795548'];
+                const card = document.getElementById('mapaGeralCard');
+                const estado = document.getElementById('mapaEstado');
+                const chkShapes = document.getElementById('mapaShapes');
+                const chkStops = document.getElementById('mapaStops');
+                let mapa;
+
+                // O mapa só é criado quando o painel é aberto (o OpenLayers precisa do tamanho do elemento).
+                card.addEventListener('shown.bs.collapse', async () => {
+                    if (mapa) { mapa.map.updateSize(); return; }
+                    mapa = gtfsMapa(document.getElementById('mapa'), document.getElementById('mapaPopup'));
+                    const legenda = document.getElementById('mapaOperadores');
+                    const camadas = feeds.map((f, i) => {
+                        const cor = cores[i % cores.length];
+                        const c = mapa.camada(cor, f.operador);
+                        const id = 'mapaOp' + f.id;
+                        legenda.insertAdjacentHTML('beforeend',
+                            `<div class="form-check form-check-inline m-0"><input class="form-check-input" type="checkbox" id="${id}" checked />` +
+                            `<label class="form-check-label" for="${id}"><span class="mapa-legenda" style="background:${cor}"></span> </label></div>`);
+                        const label = legenda.querySelector(`label[for="${id}"]`);
+                        label.append(f.operador);
+                        label.parentElement.title = f.nome;
+                        document.getElementById(id).addEventListener('change', e => {
+                            c.visivel = e.target.checked;
+                            c.setVisible(chkShapes.checked, chkStops.checked);
+                        });
+                        return c;
+                    });
+                    const visibilidade = () => camadas.forEach(c => c.setVisible(chkShapes.checked, chkStops.checked));
+                    chkShapes.addEventListener('change', visibilidade);
+                    chkStops.addEventListener('change', visibilidade);
+
+                    estado.textContent = 'A carregar…';
+                    const resultados = await Promise.allSettled(feeds.map((f, i) => camadas[i].carregar(`${url}/${f.id}?tic=true`)));
+                    const ok = resultados.filter(r => r.status === 'fulfilled').map(r => r.value);
+                    const erros = resultados.map((r, i) => r.status === 'rejected' ? feeds[i].operador : null).filter(Boolean);
+                    estado.textContent = `${ok.reduce((s, n) => s + n.paragens, 0)} paragens · ${ok.reduce((s, n) => s + n.tracados, 0)} traçados`
+                        + (erros.length ? ` · erro em: ${erros.join(', ')}` : '');
+                    mapa.ajustar();
+                });
+            })();
+        </script>
+    }
+}

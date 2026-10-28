@@ -2,8 +2,22 @@
 @{
     ViewData["Title"] = $"Circulação {Model.ViagemId}";
     var paragens = (List<LookupItem>)ViewBag.Paragens;
-    var percurso = Model.Percurso.OrderBy(p => p.Sequencia)
-        .Select(p => new { id = p.ParagemId, text = p.Paragem!.Codigo + " – " + p.Paragem.Nome }).ToList();
+    var paragensTic = (List<LookupItem>)ViewBag.ParagensTic;
+    var ticIds = paragensTic.Select(p => int.Parse(p.Value)).ToHashSet();
+    // Só se mostra o percurso a partir da paragem do TIC (inclusive); as anteriores saem ao guardar.
+    var inicio = Math.Max(0, (int)ViewBag.InicioPercurso);
+    var ocultas = (int)ViewBag.InicioPercurso > 0 ? inicio : 0;
+    var percurso = Model.Percurso.OrderBy(p => p.Sequencia).Skip(inicio)
+        .Select(p => new { id = p.ParagemId, text = p.Paragem!.Codigo + " – " + p.Paragem.Nome, tic = ticIds.Contains(p.ParagemId) }).ToList();
+    if (percurso.Count == 0 && paragensTic.Count > 0)
+        percurso.Add(new { id = int.Parse(paragensTic[0].Value), text = paragensTic[0].Text, tic = true });
+    var hoje = DateOnly.FromDateTime(DateTime.Today);
+    var primeiroDia = (DateOnly?)ViewBag.PrimeiroDia;
+    var ultimoDia = (DateOnly?)ViewBag.UltimoDia;
+    var emVigor = HorariosTic.Em(Model.HorariosTic, hoje);
+    var novoInicio = primeiroDia is { } pd && pd > hoje ? pd : hoje;
+    var novoFim = ultimoDia is { } ud && ud >= novoInicio ? ud : novoInicio.AddYears(1);
+    string H(TimeOnly? t) => t?.ToString("HH:mm") ?? "–";
     var diasSemana = new[] { (1, "Seg"), (2, "Ter"), (3, "Qua"), (4, "Qui"), (5, "Sex"), (6, "Sáb"), (0, "Dom") };
 }
 <div class="page-header">
@@ -22,9 +36,60 @@
         <div class="col-md-2"><span class="text-muted">Autorização</span><br />@Model.Autorizacao @(Model.AutorizacaoValidade is { } v ? $"(até {v:dd/MM/yyyy})" : "")</div>
         <div class="col-md-2"><span class="text-muted">ID TIC</span><br />@Model.IdTic</div>
         <div class="col-md-3"><span class="text-muted">Origem → destino</span><br />@Model.Origem?.Nome → @Model.Destino?.Nome</div>
-        <div class="col-md-3"><span class="text-muted">Chegada / partida TIC</span><br />@(Model.Chegada?.ToString("HH:mm") ?? "–") / @(Model.Partida?.ToString("HH:mm") ?? "–")</div>
+        <div class="col-md-3"><span class="text-muted">Chegada / partida TIC (em vigor)</span><br /><span class="fw-bold">@H(Model.Chegada) / @H(Model.Partida)</span></div>
+        <div class="col-md-3"><span class="text-muted">Data de início / data de fim</span><br />@(primeiroDia?.ToString("dd/MM/yyyy") ?? "–") a @(ultimoDia?.ToString("dd/MM/yyyy") ?? "–")</div>
         <div class="col-md-3"><span class="text-muted">Embarque/desembarque</span><br />@(Model.TempoEmbarqueMinutos is { } m ? $"{m} min" : "–")</div>
         <div class="col-md-3"><span class="text-muted">Declaração de capacidade</span><br />@(Model.DeclaracaoCapacidade ? "sim" : "não") @Model.IdDcp</div>
+    </div>
+</div>
+
+<div class="card mb-3 horario-tic">
+    <div class="card-header"><i class="bi bi-clock-history"></i> Horas no Terminal de Campanhã <span class="text-muted small">(histórico por período)</span></div>
+    <div class="card-body row g-3">
+        <div class="col-lg-4">
+            <p class="small text-muted mb-2">Definir as horas para um período. Os dias desse período deixam de usar o que estava definido; o resto do histórico mantém-se.</p>
+            <div class="row g-2">
+                <div class="col-6"><label class="form-label small mb-0" for="ticInicio">Data de início</label><input type="date" class="form-control form-control-sm" id="ticInicio" value="@novoInicio.ToString("yyyy-MM-dd")" /></div>
+                <div class="col-6"><label class="form-label small mb-0" for="ticFim">Data de fim</label><input type="date" class="form-control form-control-sm" id="ticFim" value="@novoFim.ToString("yyyy-MM-dd")" /></div>
+                <div class="col-6"><label class="form-label small mb-0" for="ticChegada">Chegada</label><input type="time" class="form-control form-control-sm fw-bold" id="ticChegada" value="@Model.Chegada?.ToString("HH:mm")" /></div>
+                <div class="col-6"><label class="form-label small mb-0" for="ticPartida">Partida</label><input type="time" class="form-control form-control-sm fw-bold" id="ticPartida" value="@Model.Partida?.ToString("HH:mm")" /></div>
+                <div class="col-12">
+                    <button type="button" class="btn btn-sm btn-primary" onclick="definirHorarioTic()"><i class="bi bi-check-lg"></i> Guardar horas</button>
+                    <span class="small ms-2" id="ticEstado"></span>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-8">
+            <div class="table-responsive">
+                <table class="table table-sm align-middle small mb-0">
+                    <thead><tr><th>Data de início</th><th>Data de fim</th><th>Chegada</th><th>Partida</th><th>Origem</th><th>Registado</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var h in Model.HorariosTic)
+                        {
+                            var vigor = h == emVigor;
+                            <tr class="@(vigor ? "table-primary" : h.DataFim < hoje ? "text-muted" : "")">
+                                <td>@h.DataInicio.ToString("dd/MM/yyyy")</td>
+                                <td>@h.DataFim.ToString("dd/MM/yyyy") @if (vigor) { <span class="badge text-bg-primary ms-1">em vigor</span> }</td>
+                                <td class="fw-bold">@H(h.Chegada)</td>
+                                <td class="fw-bold">@H(h.Partida)</td>
+                                <td><span class="badge @(h.Origem == OrigemHorario.Manual ? "text-bg-warning" : "text-bg-secondary")">@h.Origem.DisplayName()</span></td>
+                                <td>@h.RegistadoEm.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                <td class="text-end">
+                                    <form asp-action="RemoverHorarioTic" asp-route-id="@Model.Id" asp-route-periodoId="@h.Id" method="post"
+                                          onsubmit="return confirm('Remover este período do histórico?')">
+                                        <button class="btn btn-sm btn-link text-danger p-0" title="Remover período"><i class="bi bi-trash"></i></button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                        @if (Model.HorariosTic.Count == 0)
+                        {
+                            <tr><td colspan="7" class="text-muted">Sem histórico: valem as horas da circulação (@H(Model.Chegada) / @H(Model.Partida)) em todos os dias.</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -32,7 +97,7 @@
     <div class="col-xl-8">
         <div class="card h-100">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <span><i class="bi bi-calendar-check"></i> Calendário <span class="text-muted small">(clique num dia para alternar se a circulação se realiza)</span></span>
+                <span><i class="bi bi-calendar-check"></i> Calendário <span class="text-muted small">(clique num dia para marcar/desmarcar; é pedida confirmação)</span></span>
                 <span class="badge text-bg-success" id="totalDias"></span>
             </div>
             <div class="card-body">
@@ -62,8 +127,21 @@
     </div>
     <div class="col-xl-4">
         <div class="card h-100">
-            <div class="card-header"><i class="bi bi-signpost-2"></i> Percurso (sequência de paragens)</div>
+            <div class="card-header"><i class="bi bi-signpost-2"></i> Percurso a partir do TIC</div>
             <div class="card-body">
+                <p class="small text-muted mb-2">Paragens a partir do Terminal de Campanhã (inclusive). As horas são só as do TIC, definidas acima.</p>
+                @if (ocultas > 0)
+                {
+                    <div class="alert alert-info small py-2">@ocultas paragem(ns) antes do TIC não são mostradas e saem do percurso ao guardar.</div>
+                }
+                @if (paragensTic.Count == 0)
+                {
+                    <div class="alert alert-warning small py-2">Não há nenhuma paragem com o código do TIC deste operador. Crie-a em <a asp-controller="Paragens" asp-action="Create">Paragens</a>.</div>
+                }
+                else if (percurso.Count > 0 && !percurso[0].tic)
+                {
+                    <div class="alert alert-warning small py-2">O percurso não inclui a paragem do TIC; tem de começar nela para ser guardado.</div>
+                }
                 @if (paragens.Count == 0)
                 {
                     <div class="alert alert-warning small">Ainda não tem paragens. <a asp-controller="Paragens" asp-action="Create">Crie paragens</a> primeiro.</div>
@@ -106,6 +184,8 @@
                 },
                 dateClick: async function (info) {
                     const realiza = !diasMarcados.has(info.dateStr);
+                    const dia = info.date.toLocaleDateString('pt-PT', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
+                    if (!confirm(realiza ? `Marcar ${dia} como dia em que a circulação se realiza?` : `Desmarcar ${dia} (a circulação deixa de se realizar)?`)) return;
                     await enviarDias(info.dateStr, info.dateStr, [], realiza);
                 }
             });
@@ -132,11 +212,14 @@
             if (!inicio || !fim) { alert('Indique as datas De e Até.'); return; }
             const dias = [1, 2, 3, 4, 5, 6, 0].filter(n => document.getElementById('dow' + n).ej2_instances[0].checked);
             if (dias.length === 0) { alert('Escolha pelo menos um dia da semana.'); return; }
+            if (!confirm(`${realiza ? 'Marcar' : 'Desmarcar'} os dias escolhidos entre ${inicio.toLocaleDateString('pt-PT')} e ${fim.toLocaleDateString('pt-PT')}?`)) return;
             enviarDias(toIso(inicio), toIso(fim), dias, realiza);
         }
 
-        // ---- Percurso ----
+        // ---- Percurso (a partir do TIC) ----
         let percurso = @Json.Serialize(percurso);
+        const ticIds = new Set(@Json.Serialize(ticIds));
+        const horasTic = '@H(Model.Chegada) / @H(Model.Partida)';
 
         function renderPercurso() {
             const ol = document.getElementById('percurso');
@@ -145,14 +228,22 @@
                 ol.innerHTML = '<li class="list-group-item text-muted small">Sem paragens no percurso.</li>';
                 return;
             }
+            // A paragem do TIC à cabeça fica fixa.
+            const fixa = percurso[0].tic ? 1 : 0;
             percurso.forEach((p, i) => {
                 const li = document.createElement('li');
-                li.className = 'list-group-item';
+                const bloqueada = i < fixa;
+                li.className = 'list-group-item flex-wrap' + (p.tic ? ' percurso-tic' : '');
                 li.innerHTML = `<span class="seq">${i + 1}</span><span class="flex-grow-1"></span>
-                    <button type="button" class="btn btn-sm btn-light" title="Subir" ${i === 0 ? 'disabled' : ''}><i class="bi bi-arrow-up"></i></button>
-                    <button type="button" class="btn btn-sm btn-light" title="Descer" ${i === percurso.length - 1 ? 'disabled' : ''}><i class="bi bi-arrow-down"></i></button>
-                    <button type="button" class="btn btn-sm btn-light text-danger" title="Remover"><i class="bi bi-x-lg"></i></button>`;
-                li.querySelector('.flex-grow-1').textContent = p.text;
+                    <button type="button" class="btn btn-sm btn-light" title="Subir" ${bloqueada || i === fixa ? 'disabled' : ''}><i class="bi bi-arrow-up"></i></button>
+                    <button type="button" class="btn btn-sm btn-light" title="Descer" ${bloqueada || i === percurso.length - 1 ? 'disabled' : ''}><i class="bi bi-arrow-down"></i></button>
+                    <button type="button" class="btn btn-sm btn-light text-danger" title="Remover" ${bloqueada ? 'disabled' : ''}><i class="bi bi-x-lg"></i></button>`;
+                const nome = li.querySelector('.flex-grow-1');
+                nome.textContent = p.text;
+                if (p.tic) {
+                    nome.insertAdjacentHTML('afterbegin', '<span class="badge text-bg-primary me-1">TIC</span>');
+                    if (i === 0) nome.insertAdjacentHTML('beforeend', `<div class="percurso-tic-horas">Cheg. / Part. ${horasTic}</div>`);
+                }
                 const [up, down, del] = li.querySelectorAll('button');
                 up.onclick = () => mover(i, -1);
                 down.onclick = () => mover(i, 1);
@@ -170,7 +261,10 @@
         function adicionarParagem() {
             const dd = document.getElementById('novaParagem').ej2_instances[0];
             if (!dd.value) return;
-            percurso.push({ id: parseInt(dd.value), text: dd.text });
+            const id = parseInt(dd.value);
+            const item = { id, text: dd.text, tic: ticIds.has(id) };
+            // A paragem do TIC entra à cabeça se o percurso ainda não começa nela.
+            if (item.tic && !(percurso[0]?.tic)) percurso.unshift(item); else percurso.push(item);
             dd.value = null;
             renderPercurso();
         }
@@ -181,6 +275,27 @@
                 const r = await appTic.postJson(`@Url.Action("GuardarPercurso")/${circulacaoId}`, percurso.map(p => p.id));
                 estado.className = 'small ms-2 text-success';
                 estado.textContent = `Guardado (${r.total} paragens).`;
+            } catch (e) {
+                estado.className = 'small ms-2 text-danger';
+                estado.textContent = 'Erro: ' + e.message;
+            }
+        }
+
+        // ---- Horas no TIC ----
+        async function definirHorarioTic() {
+            const v = id => document.getElementById(id).value || null;
+            const estado = document.getElementById('ticEstado');
+            const [inicio, fim, chegada, partida] = [v('ticInicio'), v('ticFim'), v('ticChegada'), v('ticPartida')];
+            if (!inicio || !fim) { alert('Indique a data de início e a data de fim.'); return; }
+            if (!chegada && !partida) { alert('Indique a chegada e/ou a partida.'); return; }
+            const fmt = d => d.split('-').reverse().join('/');
+            if (!confirm(`Definir chegada ${chegada ?? '–'} / partida ${partida ?? '–'} no TIC de ${fmt(inicio)} a ${fmt(fim)}?`)) return;
+            try {
+                await appTic.postJson(`@Url.Action("DefinirHorarioTic")/${circulacaoId}`,
+                    { Inicio: inicio, Fim: fim, Chegada: chegada ? chegada + ':00' : null, Partida: partida ? partida + ':00' : null });
+                estado.className = 'small ms-2 text-success';
+                estado.textContent = 'Guardado.';
+                setTimeout(() => location.reload(), 500);
             } catch (e) {
                 estado.className = 'small ms-2 text-danger';
                 estado.textContent = 'Erro: ' + e.message;

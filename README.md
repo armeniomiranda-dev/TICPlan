@@ -58,6 +58,39 @@ Script SQL completo da base de dados: [`database/apptic_schema.sql`](database/ap
 
 Migrações: `dotnet tool restore && dotnet ef migrations add <Nome> -p src/AppTIC.Web -o Data/Migrations`.
 
+## Instalação no IIS (servidor 10.0.30.97)
+
+A aplicação corre no IIS com o ASP.NET Core Module (in-process). A base de dados é a `tic_plan` do PostgreSQL/PostGIS
+no mesmo servidor (`ConnectionStrings:DefaultConnection` em `appsettings.json`); as migrações aplicam-se no arranque.
+
+**Uma vez, no servidor**
+
+1. Instalar o **ASP.NET Core 10 Hosting Bundle** (inclui o runtime e o módulo do IIS) e reiniciar o IIS (`iisreset`).
+2. Criar as pastas `C:\AppTIC\site` (aplicação), `C:\AppTIC\dados\gtfs` (feeds GTFS) e `C:\AppTIC\dados\keys`
+   (chaves das sessões). Os caminhos estão em `appsettings.Production.json`.
+3. No Gestor do IIS, criar o application pool **AppTIC** com *.NET CLR version* = **No Managed Code**.
+4. Criar o site **AppTIC** com caminho físico `C:\AppTIC\site`, o pool AppTIC e o binding
+   `http` · `10.0.30.97` · porta livre (p.ex. 8080). Também funciona como aplicação dentro de um site existente
+   (p.ex. `http://10.0.30.97/AppTIC`).
+5. Dar permissão de **Modificar** em `C:\AppTIC\dados` à conta `IIS AppPool\AppTIC`:
+   `icacls C:\AppTIC\dados /grant "IIS AppPool\AppTIC:(OI)(CI)M"`
+6. Abrir a porta na firewall do Windows, se for acedida a partir de outras máquinas.
+7. Para criar o primeiro administrador numa base vazia, definir `Seed:AdminEmail` e `Seed:AdminPassword`
+   (p.ex. como variáveis de ambiente `Seed__AdminEmail`/`Seed__AdminPassword` no `web.config` publicado) e retirá-los depois.
+
+**Em cada versão**
+
+```bash
+dotnet publish src/AppTIC.Web -p:PublishProfile=IIS
+```
+
+Copiar o conteúdo de `src/AppTIC.Web/bin/Release/net10.0/publish-iis/` para `C:\AppTIC\site`. Antes de copiar, parar o
+site ou pôr na pasta um `app_offline.htm` (o IIS liberta os ficheiros e mostra essa página); retirá-lo no fim.
+
+O `web.config` define `ASPNETCORE_ENVIRONMENT=Production` e aumenta o limite de upload do IIS (30 MB por omissão) para os
+200 MB de `Gtfs:MaxUploadBytes`. Para ver erros de arranque, pôr `stdoutLogEnabled="true"` no `web.config` do servidor
+(cria `C:\AppTIC\site\logs`). Os browsers precisam de acesso à internet para o Syncfusion e o OpenLayers (CDN).
+
 ## Feeds GTFS
 
 Carregar um .zip guarda o ficheiro, calcula o SHA-256 (avisa se for duplicado) e valida: ficheiros obrigatórios

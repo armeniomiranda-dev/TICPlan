@@ -4,6 +4,7 @@
     var operadores = (List<LookupItem>)ViewBag.Operadores;
     var paragens = (List<LookupItem>)ViewBag.Paragens;
     var ambitos = (List<LookupItem>)ViewBag.Ambitos;
+    var temHistorico = (bool)ViewBag.TemHistoricoTic;
     DateTime? Hora(TimeOnly? t) => t is null ? null : DateTime.Today.Add(t.Value.ToTimeSpan());
 }
 <div class="page-header"><h1>@ViewData["Title"]</h1></div>
@@ -89,12 +90,13 @@
             </div>
             <div class="col-md-3">
                 <label asp-for="Chegada" class="form-label"></label>
-                <ejs-timepicker id="Chegada" name="Chegada" value="@Hora(Model.Chegada)" format="HH:mm" step="5" placeholder="hh:mm"></ejs-timepicker>
+                <ejs-timepicker id="Chegada" name="Chegada" value="@Hora(Model.Chegada)" enabled="@(!temHistorico)" format="HH:mm" step="5" placeholder="hh:mm"></ejs-timepicker>
             </div>
             <div class="col-md-3">
                 <label asp-for="Partida" class="form-label"></label>
-                <ejs-timepicker id="Partida" name="Partida" value="@Hora(Model.Partida)" format="HH:mm" step="5" placeholder="hh:mm"></ejs-timepicker>
+                <ejs-timepicker id="Partida" name="Partida" value="@Hora(Model.Partida)" enabled="@(!temHistorico)" format="HH:mm" step="5" placeholder="hh:mm"></ejs-timepicker>
                 <span asp-validation-for="Partida" class="text-danger small"></span>
+                @if (temHistorico) { <div class="form-text">Com histórico: altere as horas no detalhe da circulação, por período.</div> }
             </div>
             <div class="col-md-6">
                 <label asp-for="TempoEmbarqueMinutos" class="form-label"></label>

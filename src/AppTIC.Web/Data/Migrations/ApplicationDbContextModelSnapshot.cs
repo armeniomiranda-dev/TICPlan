@@ -170,6 +170,10 @@ namespace AppTIC.Web.Data.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("destino_id");
 
+                    b.Property<int?>("GtfsFeedId")
+                        .HasColumnType("integer")
+                        .HasColumnName("gtfs_feed_id");
+
                     b.Property<string>("IdDcp")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)")
@@ -218,6 +222,9 @@ namespace AppTIC.Web.Data.Migrations
                     b.HasIndex("DestinoId")
                         .HasDatabaseName("ix_circulacoes_destino_id");
 
+                    b.HasIndex("GtfsFeedId")
+                        .HasDatabaseName("ix_circulacoes_gtfs_feed_id");
+
                     b.HasIndex("OperadorId")
                         .HasDatabaseName("ix_circulacoes_operador_id");
 
@@ -248,6 +255,57 @@ namespace AppTIC.Web.Data.Migrations
                         .HasDatabaseName("ix_circulacao_dias_data");
 
                     b.ToTable("circulacao_dias", (string)null);
+                });
+
+            modelBuilder.Entity("AppTIC.Web.Models.Domain.CirculacaoHorarioTic", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<TimeOnly?>("Chegada")
+                        .HasColumnType("time without time zone")
+                        .HasColumnName("chegada");
+
+                    b.Property<int>("CirculacaoId")
+                        .HasColumnType("integer")
+                        .HasColumnName("circulacao_id");
+
+                    b.Property<DateOnly>("DataFim")
+                        .HasColumnType("date")
+                        .HasColumnName("data_fim");
+
+                    b.Property<DateOnly>("DataInicio")
+                        .HasColumnType("date")
+                        .HasColumnName("data_inicio");
+
+                    b.Property<string>("Origem")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("origem");
+
+                    b.Property<TimeOnly?>("Partida")
+                        .HasColumnType("time without time zone")
+                        .HasColumnName("partida");
+
+                    b.Property<DateTime>("RegistadoEm")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("registado_em");
+
+                    b.HasKey("Id")
+                        .HasName("pk_circulacao_horarios_tic");
+
+                    b.HasIndex("CirculacaoId", "DataInicio")
+                        .HasDatabaseName("ix_circulacao_horarios_tic_circulacao_id_data_inicio");
+
+                    b.ToTable("circulacao_horarios_tic", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_circulacao_horarios_tic_periodo", "data_fim >= data_inicio");
+                        });
                 });
 
             modelBuilder.Entity("AppTIC.Web.Models.Domain.GtfsFeed", b =>
@@ -789,6 +847,12 @@ namespace AppTIC.Web.Data.Migrations
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_circulacoes_paragens_destino_id");
 
+                    b.HasOne("AppTIC.Web.Models.Domain.GtfsFeed", "GtfsFeed")
+                        .WithMany()
+                        .HasForeignKey("GtfsFeedId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_circulacoes_gtfs_feeds_gtfs_feed_id");
+
                     b.HasOne("AppTIC.Web.Models.Domain.Operador", "Operador")
                         .WithMany("Circulacoes")
                         .HasForeignKey("OperadorId")
@@ -811,6 +875,8 @@ namespace AppTIC.Web.Data.Migrations
 
                     b.Navigation("Destino");
 
+                    b.Navigation("GtfsFeed");
+
                     b.Navigation("Operador");
 
                     b.Navigation("Origem");
@@ -826,6 +892,18 @@ namespace AppTIC.Web.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_circulacao_dias_circulacoes_circulacao_id");
+
+                    b.Navigation("Circulacao");
+                });
+
+            modelBuilder.Entity("AppTIC.Web.Models.Domain.CirculacaoHorarioTic", b =>
+                {
+                    b.HasOne("AppTIC.Web.Models.Domain.Circulacao", "Circulacao")
+                        .WithMany("HorariosTic")
+                        .HasForeignKey("CirculacaoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_circulacao_horarios_tic_circulacoes_circulacao_id");
 
                     b.Navigation("Circulacao");
                 });
@@ -975,6 +1053,8 @@ namespace AppTIC.Web.Data.Migrations
             modelBuilder.Entity("AppTIC.Web.Models.Domain.Circulacao", b =>
                 {
                     b.Navigation("Dias");
+
+                    b.Navigation("HorariosTic");
 
                     b.Navigation("Percurso");
                 });

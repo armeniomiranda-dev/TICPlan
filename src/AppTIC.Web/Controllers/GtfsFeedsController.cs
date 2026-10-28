@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AppTIC.Web.Controllers;
 
-public class GtfsFeedsController(ApplicationDbContext db, GtfsFeedService gtfs, ICurrentUser currentUser, IActivityLog log) : Controller
+public class GtfsFeedsController(ApplicationDbContext db, GtfsFeedService gtfs, GtfsImportService importacao, ICurrentUser currentUser, IActivityLog log) : Controller
 {
     public async Task<IActionResult> Index()
     {
@@ -20,6 +20,15 @@ public class GtfsFeedsController(ApplicationDbContext db, GtfsFeedService gtfs, 
             Math.Round(x.f.TamanhoBytes / 1024d / 1024d, 2), x.f.Estado.ToString(),
             x.f.DataInicio.ToDateTime(), x.f.DataFim.ToDateTime(), x.f.NumRotas, x.f.NumViagens, x.f.NumViagensTic,
             x.f.CriadoEm.ToLocalTime(), x.Dono)).ToList();
+
+        // Mapa geral: por operador, o feed mais recente com GTFS filtrado TIC.
+        ViewBag.MapaFeeds = (await db.GtfsFeeds
+                .Where(f => f.OperadorId != null && f.CaminhoFiltrado != null && f.Estado != GtfsFeedEstado.Invalido)
+                .Select(f => new { f.Id, f.Nome, f.OperadorId, f.CriadoEm, Operador = f.Operador!.Abreviatura ?? f.Operador.Designacao })
+                .ToListAsync())
+            .GroupBy(f => f.OperadorId).Select(g => g.MaxBy(f => f.CriadoEm)!)
+            .OrderBy(f => f.Operador).Select(f => new { id = f.Id, nome = f.Nome, operador = f.Operador })
+            .ToList<object>();
         return View(rows);
     }
 
@@ -86,6 +95,75 @@ public class GtfsFeedsController(ApplicationDbContext db, GtfsFeedService gtfs, 
         return PhysicalFile(path, "application/zip", Path.GetFileNameWithoutExtension(feed.NomeFicheiroOriginal) + "_TIC.zip");
     }
 
+    /// <summary>Paragens e traçados do feed (original ou filtrado TIC) em GeoJSON, para o mapa.</summary>
+    public async Task<IActionResult> Mapa(int id, bool tic = false, CancellationToken ct = default)
+    {
+        var feed = await db.GtfsFeeds.Include(f => f.Operador).FirstOrDefaultAsync(f => f.Id == id, ct);
+        if (feed is null) return NotFound();
+        var path = tic ? gtfs.GetFullPathFiltrado(feed) : gtfs.GetFullPath(feed);
+        if (path is null || !System.IO.File.Exists(path)) return NotFound();
+        var paragensTic = gtfs.ParagensTic(feed.Operador);
+        try
+        {
+            return Json(await Task.Run(() => GtfsMapa.GeoJson(path, paragensTic), ct));
+        }
+        catch (Exception ex) when (ex is InvalidDataException or IOException or CsvHelper.CsvHelperException)
+        {
+            return Problem($"Não foi possível ler o feed: {ex.Message}");
+        }
+    }
+
+    // ---- Importação de paragens, circulações e calendário ----
+
+    public async Task<IActionResult> Importar(int id, DateOnly? inicio, DateOnly? fim, CancellationToken ct)
+    {
+        var feed = await db.GtfsFeeds.Include(f => f.Operador).FirstOrDefaultAsync(f => f.Id == id, ct);
+        if (feed is null) return NotFound();
+        if (feed.CaminhoFiltrado is null || feed.OperadorId is null)
+        {
+            TempData["Erro"] = "O feed tem de ter operador e GTFS filtrado TIC para importar.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+        var dados = await importacao.LerAsync(feed, ct);
+        var intervalo = dados.Intervalo();
+        var (i, f) = (inicio ?? feed.DataInicio ?? intervalo?.Inicio ?? DateOnly.FromDateTime(DateTime.Today),
+                      fim ?? feed.DataFim ?? intervalo?.Fim ?? DateOnly.FromDateTime(DateTime.Today));
+        if (f < i) f = i;
+        if (f.DayNumber - i.DayNumber > MaxDiasImportacao) f = i.AddDays(MaxDiasImportacao);
+        ViewBag.Feed = feed;
+        ViewBag.Intervalo = intervalo;
+        return View(await importacao.PreverAsync(feed, dados, i, f, ct));
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> Importar(int id, DateOnly inicio, DateOnly fim, string[] rotas, CancellationToken ct)
+    {
+        var feed = await db.GtfsFeeds.Include(f => f.Operador).FirstOrDefaultAsync(f => f.Id == id, ct);
+        if (feed is null) return NotFound();
+        if (fim < inicio || fim.DayNumber - inicio.DayNumber > MaxDiasImportacao || rotas.Length == 0)
+        {
+            TempData["Erro"] = $"Escolha pelo menos uma rota e um intervalo válido (máximo {MaxDiasImportacao + 1} dias).";
+            return RedirectToAction(nameof(Importar), new { id, inicio = inicio.ToString("yyyy-MM-dd"), fim = fim.ToString("yyyy-MM-dd") });
+        }
+        try
+        {
+            var dados = await importacao.LerAsync(feed, ct);
+            var r = await importacao.ImportarAsync(feed, dados, rotas.ToHashSet(StringComparer.Ordinal), inicio, fim, ct);
+            TempData[r.Ignoradas > 0 ? "Erro" : "Ok"] =
+                $"Importação concluída: {r.ParagensNovas} paragens novas, {r.ParagensAtualizadas} atualizadas; {r.CirculacoesNovas} circulações novas, "
+                + $"{r.CirculacoesAtualizadas} atualizadas" + (r.Ignoradas > 0 ? $", {r.Ignoradas} ignoradas por conflito" : "") + $"; {r.Dias} dias de calendário.";
+            return RedirectToAction("Index", "Circulacoes", new { operadorId = feed.OperadorId });
+        }
+        catch (Exception ex) when (ex is InvalidDataException or IOException or CsvHelper.CsvHelperException or DbUpdateException)
+        {
+            await log.LogAsync(CategoriaRegisto.Gtfs, "Importação", $"Erro na importação: {ex.GetBaseException().Message}", NivelRegisto.Erro, feed.Id, feed.OwnerId);
+            TempData["Erro"] = $"Erro na importação: {ex.GetBaseException().Message}";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+    }
+
+    private const int MaxDiasImportacao = 730;
+
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Revalidar(int id, CancellationToken ct)
     {
@@ -93,6 +171,7 @@ public class GtfsFeedsController(ApplicationDbContext db, GtfsFeedService gtfs, 
         if (feed is null) return NotFound();
         await gtfs.ValidateAsync(feed, ct);
         await gtfs.FiltrarTicAsync(feed, ct);
+        await gtfs.CarregarBdAsync(feed, ct);
         TempData["Ok"] = $"Validação concluída: {feed.Estado.DisplayName()}.";
         return RedirectToAction(nameof(Details), new { id });
     }

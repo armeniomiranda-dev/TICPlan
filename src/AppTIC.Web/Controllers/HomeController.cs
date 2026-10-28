@@ -2,13 +2,14 @@ using System.Diagnostics;
 using AppTIC.Web.Data;
 using AppTIC.Web.Models;
 using AppTIC.Web.Models.Domain;
+using AppTIC.Web.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace AppTIC.Web.Controllers;
 
-public class HomeController(ApplicationDbContext db) : Controller
+public class HomeController(ApplicationDbContext db, OcupacaoTerminal ocupacao) : Controller
 {
     public async Task<IActionResult> Index()
     {
@@ -32,6 +33,11 @@ public class HomeController(ApplicationDbContext db) : Controller
         ViewBag.UltimosFeeds = await db.GtfsFeeds.OrderByDescending(f => f.CriadoEm).Take(5).ToListAsync();
         return View();
     }
+
+    /// <summary>Ocupação do terminal num dia (por omissão hoje), em intervalos de 15 minutos.</summary>
+    [HttpGet, Authorize(Roles = Roles.Admin)]
+    public async Task<IActionResult> Ocupacao(DateOnly? dia, CancellationToken ct) =>
+        Json(await ocupacao.DoDiaAsync(dia ?? DateOnly.FromDateTime(DateTime.Today), ct));
 
     [AllowAnonymous]
     [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]

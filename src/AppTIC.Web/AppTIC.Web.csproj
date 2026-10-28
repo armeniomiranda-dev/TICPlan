@@ -18,4 +18,9 @@
     <PackageReference Include="Syncfusion.EJ2.AspNet.Core" Version="35.1.41" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- A configuração de desenvolvimento (BD local) não vai para o servidor. -->
+    <Content Update="appsettings.Development.json" CopyToPublishDirectory="Never" />
+  </ItemGroup>
+
 </Project>

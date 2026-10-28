@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AppTIC.Web.Controllers;
 
-public class CirculacoesController(ApplicationDbContext db, ICurrentUser currentUser, IActivityLog log) : Controller
+public class CirculacoesController(ApplicationDbContext db, ICurrentUser currentUser, IActivityLog log, GtfsFeedService gtfs) : Controller
 {
     public async Task<IActionResult> Index(int? operadorId = null)
     {
@@ -43,7 +43,7 @@ public class CirculacoesController(ApplicationDbContext db, ICurrentUser current
     {
         var c = await db.Circulacoes.FindAsync(id);
         if (c is null) return NotFound();
-        await LoadLookups(c.OwnerId);
+        await LoadLookups(c.OwnerId, c.Id);
         return View("Form", c);
     }
 
@@ -63,12 +63,12 @@ public class CirculacoesController(ApplicationDbContext db, ICurrentUser current
                 ModelState.AddModelError(field, "Paragem inválida.");
         if (await db.Circulacoes.AnyAsync(c => c.Id != model.Id && c.OwnerId == ownerId && c.ViagemId == model.ViagemId))
             ModelState.AddModelError(nameof(Circulacao.ViagemId), "Já existe uma circulação com este ID de viagem.");
-        if (model.Chegada is null && model.Partida is null)
+        if (model.Id == 0 && model.Chegada is null && model.Partida is null)
             ModelState.AddModelError(nameof(Circulacao.Partida), "Indique a chegada e/ou a partida do TIC.");
 
         if (!ModelState.IsValid)
         {
-            await LoadLookups(ownerId);
+            await LoadLookups(ownerId, model.Id);
             return View("Form", model);
         }
 
@@ -84,8 +84,12 @@ public class CirculacoesController(ApplicationDbContext db, ICurrentUser current
         entity.IdTic = model.IdTic;
         entity.OrigemId = model.OrigemId;
         entity.DestinoId = model.DestinoId;
-        entity.Chegada = model.Chegada;
-        entity.Partida = model.Partida;
+        // Com histórico, as horas no TIC mudam-se no detalhe (por período); sem histórico, aqui.
+        if (model.Id == 0 || !await db.CirculacaoHorariosTic.AnyAsync(h => h.CirculacaoId == model.Id))
+        {
+            entity.Chegada = model.Chegada;
+            entity.Partida = model.Partida;
+        }
         entity.TempoEmbarqueMinutos = model.TempoEmbarqueMinutos;
         entity.Comentarios = model.Comentarios;
         if (model.Id == 0) db.Circulacoes.Add(entity);
@@ -115,10 +119,56 @@ public class CirculacoesController(ApplicationDbContext db, ICurrentUser current
         var c = await db.Circulacoes
             .Include(x => x.Operador).Include(x => x.Origem).Include(x => x.Destino)
             .Include(x => x.Percurso.OrderBy(p => p.Sequencia)).ThenInclude(p => p.Paragem)
+            .Include(x => x.HorariosTic.OrderByDescending(h => h.DataInicio))
+            .Include(x => x.GtfsFeed)
             .FirstOrDefaultAsync(x => x.Id == id);
         if (c is null) return NotFound();
+        var tic = gtfs.ParagensTic(c.Operador).ToHashSet(StringComparer.Ordinal);
         ViewBag.Paragens = await ParagensLookup(c.OwnerId);
+        ViewBag.ParagensTic = await db.Paragens.Where(p => p.OwnerId == c.OwnerId && tic.Contains(p.Codigo))
+            .OrderBy(p => p.Codigo).Select(p => new LookupItem(p.Id.ToString(), p.Codigo + " – " + p.Nome)).ToListAsync();
+        // Só se mostra o percurso a partir da paragem do TIC (inclusive).
+        ViewBag.InicioPercurso = c.Percurso.FindIndex(p => tic.Contains(p.Paragem!.Codigo));
+        ViewBag.PrimeiroDia = await db.CirculacaoDias.Where(d => d.CirculacaoId == id).MinAsync(d => (DateOnly?)d.Data);
+        ViewBag.UltimoDia = await db.CirculacaoDias.Where(d => d.CirculacaoId == id).MaxAsync(d => (DateOnly?)d.Data);
         return View(c);
+    }
+
+    // ---- Horas no TIC (histórico por período) ----
+
+    public record HorarioTicRequest(DateOnly Inicio, DateOnly Fim, TimeOnly? Chegada, TimeOnly? Partida);
+
+    /// <summary>Define as horas no TIC para um período (substitui o que estava definido nesses dias).</summary>
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> DefinirHorarioTic(int id, [FromBody] HorarioTicRequest req)
+    {
+        var c = await db.Circulacoes.Include(x => x.HorariosTic).FirstOrDefaultAsync(x => x.Id == id);
+        if (c is null) return NotFound();
+        if (req.Fim < req.Inicio || req.Fim.DayNumber - req.Inicio.DayNumber > 3660)
+            return BadRequest("Período inválido (a data de fim tem de ser igual ou posterior à de início; máximo 10 anos).");
+        if (req.Chegada is null && req.Partida is null)
+            return BadRequest("Indique a chegada e/ou a partida do TIC.");
+
+        HorariosTic.Definir(c, req.Inicio, req.Fim, Minuto(req.Chegada), Minuto(req.Partida), OrigemHorario.Manual, DateOnly.FromDateTime(DateTime.Today));
+        await db.SaveChangesAsync();
+        await log.LogAsync(CategoriaRegisto.Dados, "Horário TIC",
+            $"Circulação {c.ViagemId}: de {req.Inicio:dd/MM/yyyy} a {req.Fim:dd/MM/yyyy} chegada {req.Chegada:HH\\:mm} / partida {req.Partida:HH\\:mm}.",
+            ownerId: c.OwnerId);
+        return Json(new { periodos = c.HorariosTic.Count });
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> RemoverHorarioTic(int id, int periodoId)
+    {
+        var c = await db.Circulacoes.Include(x => x.HorariosTic).FirstOrDefaultAsync(x => x.Id == id);
+        var p = c?.HorariosTic.FirstOrDefault(h => h.Id == periodoId);
+        if (c is null || p is null) return NotFound();
+        HorariosTic.Remover(c, p, DateOnly.FromDateTime(DateTime.Today));
+        await db.SaveChangesAsync();
+        await log.LogAsync(CategoriaRegisto.Dados, "Horário TIC",
+            $"Circulação {c.ViagemId}: removido o período de {p.DataInicio:dd/MM/yyyy} a {p.DataFim:dd/MM/yyyy}.", NivelRegisto.Aviso, ownerId: c.OwnerId);
+        TempData["Ok"] = "Período removido do histórico.";
+        return RedirectToAction(nameof(Details), new { id });
     }
 
     // ---- Calendário ----
@@ -172,30 +222,39 @@ public class CirculacoesController(ApplicationDbContext db, ICurrentUser current
 
     // ---- Percurso ----
 
+    /// <summary>Guarda o percurso (ids das paragens por ordem); tem de começar na paragem do TIC.</summary>
     [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> GuardarPercurso(int id, [FromBody] int[] paragens)
+    public async Task<IActionResult> GuardarPercurso(int id, [FromBody] int[] percurso)
     {
-        var c = await db.Circulacoes.Include(x => x.Percurso).FirstOrDefaultAsync(x => x.Id == id);
+        var c = await db.Circulacoes.Include(x => x.Percurso).Include(x => x.Operador).FirstOrDefaultAsync(x => x.Id == id);
         if (c is null) return NotFound();
 
-        var validas = await db.Paragens.Where(p => p.OwnerId == c.OwnerId && paragens.Contains(p.Id)).Select(p => p.Id).ToListAsync();
-        if (paragens.Any(p => !validas.Contains(p))) return BadRequest("Paragem inválida no percurso.");
+        var ids = percurso.Distinct().ToList();
+        var codigos = await db.Paragens.Where(p => p.OwnerId == c.OwnerId && ids.Contains(p.Id)).ToDictionaryAsync(p => p.Id, p => p.Codigo);
+        if (ids.Any(p => !codigos.ContainsKey(p))) return BadRequest("Paragem inválida no percurso.");
+        var tic = gtfs.ParagensTic(c.Operador);
+        if (percurso.Length > 0 && tic.Count > 0 && !tic.Contains(codigos[percurso[0]]))
+            return BadRequest($"O percurso tem de começar na paragem do TIC ({string.Join(", ", tic)}).");
 
         db.Percursos.RemoveRange(c.Percurso);
         await db.SaveChangesAsync();
-        db.Percursos.AddRange(paragens.Select((p, i) => new PercursoParagem { CirculacaoId = id, Sequencia = i + 1, ParagemId = p }));
+        db.Percursos.AddRange(percurso.Select((p, i) => new PercursoParagem { CirculacaoId = id, Sequencia = i + 1, ParagemId = p }));
         await db.SaveChangesAsync();
 
-        await log.LogAsync(CategoriaRegisto.Dados, "Percurso", $"Circulação {c.ViagemId}: percurso com {paragens.Length} paragem(ns).", ownerId: c.OwnerId);
-        return Json(new { total = paragens.Length });
+        await log.LogAsync(CategoriaRegisto.Dados, "Percurso",
+            $"Circulação {c.ViagemId}: percurso com {percurso.Length} paragem(ns).", ownerId: c.OwnerId);
+        return Json(new { total = percurso.Length });
     }
 
-    private async Task LoadLookups(string ownerId)
+    private static TimeOnly? Minuto(TimeOnly? t) => t is { } x ? new TimeOnly(x.Hour, x.Minute) : null;
+
+    private async Task LoadLookups(string ownerId, int circulacaoId = 0)
     {
         ViewBag.Operadores = await db.Operadores.Where(o => o.OwnerId == ownerId).OrderBy(o => o.Designacao)
             .Select(o => new LookupItem(o.Id.ToString(), o.Nif + " – " + (o.Abreviatura ?? o.Designacao))).ToListAsync();
         ViewBag.Paragens = await ParagensLookup(ownerId);
         ViewBag.Ambitos = EnumExtensions.ToLookup<Ambito>();
+        ViewBag.TemHistoricoTic = circulacaoId != 0 && await db.CirculacaoHorariosTic.AnyAsync(h => h.CirculacaoId == circulacaoId);
     }
 
     private Task<List<LookupItem>> ParagensLookup(string ownerId) =>

@@ -1,9 +1,10 @@
 @{
     ViewData["Title"] = "Calendário";
     var operadores = (List<LookupItem>)ViewBag.Operadores;
+    var legenda = (List<AppTIC.Web.Controllers.CalendarioController.OperadorCor>)ViewBag.Legenda;
 }
 <div class="page-header">
-    <h1>Calendário de circulações no TIC</h1>
+    <h1>Calendário de chegadas e partidas no TIC</h1>
     <div style="min-width: 260px">
         <ejs-dropdownlist id="filtroOperador" dataSource="@operadores" placeholder="Todos os operadores" showClearButton="true"
                           allowFiltering="true" filterType="Contains" change="filtrar">
@@ -11,35 +12,93 @@
         </ejs-dropdownlist>
     </div>
 </div>
-<p class="small text-muted"><span class="badge" style="background:#0d6efd">P</span> partida do TIC &nbsp; <span class="badge" style="background:#6f42c1">C</span> chegada ao TIC (sem partida)</p>
+
+<div class="d-flex flex-wrap align-items-center gap-3 small mb-2">
+    <div class="form-check form-check-inline m-0">
+        <input class="form-check-input" type="checkbox" id="verChegadas" checked onchange="filtrar()" />
+        <label class="form-check-label" for="verChegadas"><span class="cal-chip cal-chegada">↓ 13:25</span> Chegadas</label>
+    </div>
+    <div class="form-check form-check-inline m-0">
+        <input class="form-check-input" type="checkbox" id="verPartidas" checked onchange="filtrar()" />
+        <label class="form-check-label" for="verPartidas"><span class="cal-chip cal-partida">↑ 14:00</span> Partidas</label>
+    </div>
+    <span class="vr"></span>
+    @foreach (var o in legenda)
+    {
+        <span><span class="cal-cor" style="background:@o.Cor"></span> @o.Nome</span>
+    }
+    <span class="text-muted ms-auto">Passe o rato sobre um evento para ver o detalhe; clique para abrir a circulação.</span>
+</div>
 <div id="calendario"></div>
+
+@section Head {
+    <style>
+        .cal-cor { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: middle; }
+        .cal-chip { display: inline-block; padding: 0 4px; border-radius: 3px; border: 1px solid #495057; font-size: .75rem; }
+        .cal-chegada { background: #fff; color: #495057; }
+        .cal-partida { background: #495057; color: #fff; }
+        #calendario .fc-timegrid-event .fc-event-main { padding: 0 3px; font-size: .75rem; line-height: 1.25; }
+        #calendario .fc-timegrid-event { border-width: 1px 1px 1px 3px; }
+        #calendario .fc-timegrid-slot { height: 2.2em; }
+        #calendario .fc-list-event-title small { color: var(--bs-secondary-color); }
+    </style>
+}
 
 @section Scripts {
     <script src="~/lib/fullcalendar/index.global.min.js"></script>
     <script src="~/lib/fullcalendar/locales/pt.global.min.js"></script>
     <script>
         let calendar, operadorId = null;
+        const vista = (() => { try { return localStorage.getItem('calendarioVista'); } catch { return null; } })();
+
         document.addEventListener('DOMContentLoaded', function () {
             calendar = new FullCalendar.Calendar(document.getElementById('calendario'), {
                 locale: 'pt',
-                initialView: 'timeGridWeek',
+                initialView: vista || 'timeGridWeek',
                 height: 'auto',
                 slotMinTime: '00:00:00',
+                slotDuration: '00:30:00',
                 scrollTime: '06:00:00',
                 nowIndicator: true,
-                defaultTimedEventDuration: '00:15',
-                dayMaxEvents: 6,
-                headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek' },
+                allDaySlot: false,
+                defaultTimedEventDuration: '00:20',
+                eventTimeFormat: { hour: '2-digit', minute: '2-digit', hour12: false },
+                slotEventOverlap: false,
+                eventMaxStack: 4,
+                dayMaxEvents: 5,
+                headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,timeGridDay,listDay,listWeek' },
+                buttonText: { listDay: 'lista dia', listWeek: 'lista semana' },
                 events: function (info, success, failure) {
-                    const q = new URLSearchParams({ start: info.startStr.substring(0, 10), end: info.endStr.substring(0, 10) });
+                    const tipos = (document.getElementById('verChegadas').checked ? 'C' : '') + (document.getElementById('verPartidas').checked ? 'P' : '');
+                    if (!tipos) { success([]); return; }
+                    const q = new URLSearchParams({ start: info.startStr.substring(0, 10), end: info.endStr.substring(0, 10), tipos });
                     if (operadorId) q.set('operadorId', operadorId);
                     fetch('@Url.Action("Eventos")?' + q).then(r => r.json()).then(success).catch(failure);
+                },
+                eventDidMount: function (info) {
+                    const p = info.event.extendedProps;
+                    info.el.title = [
+                        `${p.tipo === 'C' ? 'Chegada ao TIC' : 'Partida do TIC'} ${p.tipo === 'C' ? p.chegada : p.partida}`,
+                        `${p.operador} · linha ${p.linha}`,
+                        p.percurso,
+                        `Viagem ${p.viagem}`,
+                        `Chegada ${p.chegada ?? '–'} / partida ${p.partida ?? '–'}`
+                    ].join('\n');
+                    // Nas listas acrescenta o percurso ao título.
+                    if (info.view.type.startsWith('list')) {
+                        const t = info.el.querySelector('.fc-list-event-title a');
+                        if (t) { const s = document.createElement('small'); s.textContent = `  ${p.percurso} · ${p.viagem}`; t.append(s); }
+                    }
+                },
+                datesSet: function (info) {
+                    try { localStorage.setItem('calendarioVista', info.view.type); } catch { }
                 }
             });
             calendar.render();
         });
+
         function filtrar(args) {
-            operadorId = args.value;
+            if (args && 'value' in args) operadorId = args.value;
             calendar.refetchEvents();
         }
     </script>

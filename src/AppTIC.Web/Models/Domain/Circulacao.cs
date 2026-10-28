@@ -44,17 +44,26 @@ public class Circulacao : OwnedEntity
     public int? DestinoId { get; set; }
     public Paragem? Destino { get; set; }
 
+    /// <summary>Hora de chegada ao TIC em vigor (copiada do período de HorariosTic que se aplica hoje).</summary>
     [Display(Name = "Chegada ao TIC")]
     public TimeOnly? Chegada { get; set; }
 
+    /// <summary>Hora de partida do TIC em vigor (copiada do período de HorariosTic que se aplica hoje).</summary>
     [Display(Name = "Partida do TIC")]
     public TimeOnly? Partida { get; set; }
+
+    /// <summary>Histórico das horas no TIC, por período.</summary>
+    public List<CirculacaoHorarioTic> HorariosTic { get; set; } = [];
 
     [Range(0, 1440), Display(Name = "Tempo embarque/desembarque (min)")]
     public int? TempoEmbarqueMinutos { get; set; }
 
     [Display(Name = "Comentários")]
     public string? Comentarios { get; set; }
+
+    /// <summary>Feed GTFS de onde foi importada (o trip_id é o ViagemId); dá os horários em gtfs.stop_times.</summary>
+    public int? GtfsFeedId { get; set; }
+    public GtfsFeed? GtfsFeed { get; set; }
 
     /// <summary>Folha "calendário": dias em que a circulação se realiza.</summary>
     public List<CirculacaoDia> Dias { get; set; } = [];
@@ -78,4 +87,36 @@ public class PercursoParagem
     public int Sequencia { get; set; }
     public int ParagemId { get; set; }
     public Paragem? Paragem { get; set; }
+}
+
+public enum OrigemHorario
+{
+    [Display(Name = "GTFS")] Gtfs,
+    [Display(Name = "Manual")] Manual
+}
+
+/// <summary>
+/// Histórico das horas no TIC: período [DataInicio, DataFim] em que a circulação chega/parte a estas horas.
+/// Os períodos de uma circulação não se sobrepõem.
+/// </summary>
+public class CirculacaoHorarioTic
+{
+    public int Id { get; set; }
+    public int CirculacaoId { get; set; }
+    public Circulacao? Circulacao { get; set; }
+
+    [Display(Name = "Data de início")]
+    public DateOnly DataInicio { get; set; }
+
+    [Display(Name = "Data de fim")]
+    public DateOnly DataFim { get; set; }
+
+    [Display(Name = "Chegada ao TIC")]
+    public TimeOnly? Chegada { get; set; }
+
+    [Display(Name = "Partida do TIC")]
+    public TimeOnly? Partida { get; set; }
+
+    public OrigemHorario Origem { get; set; }
+    public DateTime RegistadoEm { get; set; } = DateTime.UtcNow;
 }

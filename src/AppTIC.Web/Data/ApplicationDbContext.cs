@@ -26,6 +26,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Circulacao> Circulacoes => Set<Circulacao>();
     public DbSet<CirculacaoDia> CirculacaoDias => Set<CirculacaoDia>();
     public DbSet<PercursoParagem> Percursos => Set<PercursoParagem>();
+    public DbSet<CirculacaoHorarioTic> CirculacaoHorariosTic => Set<CirculacaoHorarioTic>();
     public DbSet<GtfsFeed> GtfsFeeds => Set<GtfsFeed>();
     public DbSet<RegistoAtividade> Registos => Set<RegistoAtividade>();
 
@@ -58,6 +59,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             e.HasOne(x => x.Operador).WithMany(o => o.Circulacoes).HasForeignKey(x => x.OperadorId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.Origem).WithMany().HasForeignKey(x => x.OrigemId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(x => x.Destino).WithMany().HasForeignKey(x => x.DestinoId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(x => x.GtfsFeed).WithMany().HasForeignKey(x => x.GtfsFeedId).OnDelete(DeleteBehavior.SetNull);
         });
 
         b.Entity<CirculacaoDia>(e =>
@@ -73,6 +75,15 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             e.HasKey(x => new { x.CirculacaoId, x.Sequencia });
             e.HasOne(x => x.Circulacao).WithMany(c => c.Percurso).HasForeignKey(x => x.CirculacaoId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.Paragem).WithMany().HasForeignKey(x => x.ParagemId).OnDelete(DeleteBehavior.Restrict);
+            e.HasQueryFilter(x => _isAdmin || x.Circulacao!.OwnerId == _userId);
+        });
+
+        b.Entity<CirculacaoHorarioTic>(e =>
+        {
+            e.ToTable("circulacao_horarios_tic", t => t.HasCheckConstraint("ck_circulacao_horarios_tic_periodo", "data_fim >= data_inicio"));
+            e.HasIndex(x => new { x.CirculacaoId, x.DataInicio });
+            e.Property(x => x.Origem).HasConversion<string>().HasMaxLength(10);
+            e.HasOne(x => x.Circulacao).WithMany(c => c.HorariosTic).HasForeignKey(x => x.CirculacaoId).OnDelete(DeleteBehavior.Cascade);
             e.HasQueryFilter(x => _isAdmin || x.Circulacao!.OwnerId == _userId);
         });
 
