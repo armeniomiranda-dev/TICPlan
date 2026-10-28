@@ -22,25 +22,38 @@ public static class DbSeeder
             if (!await roleManager.RoleExistsAsync(role))
                 await roleManager.CreateAsync(new IdentityRole(role));
 
+        var userManager = sp.GetRequiredService<UserManager<ApplicationUser>>();
+
         var email = config["Seed:AdminEmail"];
         var password = config["Seed:AdminPassword"];
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
-        {
             logger.LogInformation("Seed:AdminEmail/Seed:AdminPassword não definidos; nenhum Admin criado.");
-            return;
-        }
+        else
+            await EnsureUserAsync(userManager, logger, new SeedUser(email, password, "Administrador", null, Roles.Admin));
 
-        var userManager = sp.GetRequiredService<UserManager<ApplicationUser>>();
-        if (await userManager.FindByEmailAsync(email) is not null) return;
+        // Logins de teste (apenas configurados em appsettings.Development.json).
+        foreach (var user in config.GetSection("Seed:TestUsers").Get<List<SeedUser>>() ?? [])
+            await EnsureUserAsync(userManager, logger, user);
+    }
 
-        var admin = new ApplicationUser { UserName = email, Email = email, EmailConfirmed = true, NomeCompleto = "Administrador" };
-        var result = await userManager.CreateAsync(admin, password);
+    public record SeedUser(string Email, string Password, string? NomeCompleto, string? Entidade, string Perfil = Roles.Utilizador);
+
+    private static async Task EnsureUserAsync(UserManager<ApplicationUser> userManager, ILogger logger, SeedUser seed)
+    {
+        if (string.IsNullOrWhiteSpace(seed.Email) || await userManager.FindByEmailAsync(seed.Email) is not null) return;
+
+        var user = new ApplicationUser
+        {
+            UserName = seed.Email, Email = seed.Email, EmailConfirmed = true,
+            NomeCompleto = seed.NomeCompleto, Entidade = seed.Entidade
+        };
+        var result = await userManager.CreateAsync(user, seed.Password);
         if (!result.Succeeded)
         {
-            logger.LogError("Falha ao criar Admin: {Erros}", string.Join("; ", result.Errors.Select(e => e.Description)));
+            logger.LogError("Falha ao criar {Email}: {Erros}", seed.Email, string.Join("; ", result.Errors.Select(e => e.Description)));
             return;
         }
-        await userManager.AddToRoleAsync(admin, Roles.Admin);
-        logger.LogInformation("Admin {Email} criado.", email);
+        await userManager.AddToRoleAsync(user, Roles.Todos.Contains(seed.Perfil) ? seed.Perfil : Roles.Utilizador);
+        logger.LogInformation("Utilizador {Email} ({Perfil}) criado.", seed.Email, seed.Perfil);
     }
 }
