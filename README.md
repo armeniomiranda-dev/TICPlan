@@ -36,7 +36,15 @@ cd src/AppTIC.Web
 dotnet run                                 # aplica as migrações e cria o Admin
 ```
 
-Admin de desenvolvimento (definido em `appsettings.Development.json`): `admin@apptic.local` / `Admin12345`.
+Logins de teste (criados no arranque em Development, definidos em `Seed` no `appsettings.Development.json`):
+
+| Login | Palavra-passe | Perfil |
+|---|---|---|
+| `admin@apptic.local` | `Admin12345` | Admin (vê todos os dados) |
+| `rne@apptic.local` | `Rne12345` | Utilizador – Rede Nacional de Expressos |
+| `flixbus@apptic.local` | `Flixbus123` | Utilizador – FlixBus |
+
+Só são criados se ainda não existirem. Para produção, defina apenas `Seed:AdminEmail`/`Seed:AdminPassword` e crie os restantes utilizadores em **Utilizadores**.
 
 Configuração (`appsettings.json` ou variáveis de ambiente, ex. `ConnectionStrings__DefaultConnection`):
 
