@@ -1,4 +1,5 @@
 @model Operador
+@inject Microsoft.Extensions.Options.IOptions<GtfsOptions> GtfsOpts
 @{
     ViewData["Title"] = Model.Id == 0 ? "Novo operador" : "Editar operador";
     var ambitos = EnumExtensions.ToLookup<Ambito>();
@@ -38,6 +39,15 @@
                 <ejs-dropdownlist id="Ambito" name="Ambito" dataSource="@ambitos" value="@Model.Ambito?.ToString()" placeholder="Escolha…" showClearButton="true">
                     <e-dropdownlist-fields text="Text" value="Value"></e-dropdownlist-fields>
                 </ejs-dropdownlist>
+            </div>
+            <div class="col-12">
+                <label asp-for="GtfsParagensTic" class="form-label"></label>
+                <input asp-for="GtfsParagensTic" class="form-control font-monospace" placeholder="ex.: 100" />
+                <div class="form-text">
+                    stop_id da paragem do TIC no GTFS deste operador (vários separados por vírgula). Os feeds GTFS do operador são filtrados
+                    pelas viagens que passam nestas paragens. Vazio = usa a lista por omissão:
+                    <code>@string.Join(", ", GtfsOpts.Value.ParagensTicPorOmissao)</code>
+                </div>
             </div>
             <div class="col-12">
                 <label asp-for="Comentarios" class="form-label"></label>

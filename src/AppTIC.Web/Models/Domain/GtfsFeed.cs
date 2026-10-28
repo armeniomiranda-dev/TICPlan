@@ -13,6 +13,10 @@ public enum GtfsFeedEstado
 /// <summary>Ficheiro GTFS (.zip) carregado por um login.</summary>
 public class GtfsFeed : OwnedEntity
 {
+    [Display(Name = "Operador")]
+    public int? OperadorId { get; set; }
+    public Operador? Operador { get; set; }
+
     [Required, StringLength(200), Display(Name = "Nome")]
     public string Nome { get; set; } = string.Empty;
 
@@ -52,6 +56,23 @@ public class GtfsFeed : OwnedEntity
     public int NumRotas { get; set; }
     public int NumViagens { get; set; }
     public int NumHorarios { get; set; }
+
+    // ---- Filtragem pelas paragens do TIC ----
+
+    /// <summary>stop_id(s) usados na última filtragem (separados por vírgula).</summary>
+    [StringLength(1000)]
+    public string? ParagensTic { get; set; }
+
+    public int NumViagensTic { get; set; }
+    public int NumHorariosTic { get; set; }
+    public int NumRotasTic { get; set; }
+    public int NumParagensTic { get; set; }
+
+    /// <summary>Caminho (relativo) do GTFS filtrado só com as viagens que passam no TIC.</summary>
+    [StringLength(500)]
+    public string? CaminhoFiltrado { get; set; }
+
+    public long? TamanhoFiltradoBytes { get; set; }
 
     public List<RegistoAtividade> Registos { get; set; } = [];
 }

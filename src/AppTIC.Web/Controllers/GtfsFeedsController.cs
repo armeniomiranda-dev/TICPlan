@@ -14,22 +14,34 @@ public class GtfsFeedsController(ApplicationDbContext db, GtfsFeedService gtfs, 
     {
         var isAdmin = currentUser.IsAdmin;
         var data = await db.GtfsFeeds.OrderByDescending(f => f.CriadoEm)
-            .Select(f => new { f, Dono = isAdmin ? f.Owner!.Email : null }).ToListAsync();
-        var rows = data.Select(x => new GtfsFeedRow(x.f.Id, x.f.Nome, x.f.NomeFicheiroOriginal,
+            .Select(f => new { f, Operador = f.Operador != null ? f.Operador.Abreviatura ?? f.Operador.Designacao : null, Dono = isAdmin ? f.Owner!.Email : null })
+            .ToListAsync();
+        var rows = data.Select(x => new GtfsFeedRow(x.f.Id, x.f.Nome, x.Operador, x.f.NomeFicheiroOriginal,
             Math.Round(x.f.TamanhoBytes / 1024d / 1024d, 2), x.f.Estado.ToString(),
-            x.f.DataInicio.ToDateTime(), x.f.DataFim.ToDateTime(), x.f.NumRotas, x.f.NumViagens, x.f.CriadoEm.ToLocalTime(), x.Dono)).ToList();
+            x.f.DataInicio.ToDateTime(), x.f.DataFim.ToDateTime(), x.f.NumRotas, x.f.NumViagens, x.f.NumViagensTic,
+            x.f.CriadoEm.ToLocalTime(), x.Dono)).ToList();
         return View(rows);
     }
 
-    public IActionResult Upload() => View(new GtfsUploadViewModel());
+    public async Task<IActionResult> Upload(int? operadorId = null)
+    {
+        await LoadOperadores();
+        return View(new GtfsUploadViewModel { OperadorId = operadorId });
+    }
 
     [HttpPost, ValidateAntiForgeryToken, RequestFormLimits(MultipartBodyLengthLimit = long.MaxValue), DisableRequestSizeLimit]
     public async Task<IActionResult> Upload(GtfsUploadViewModel model, CancellationToken ct)
     {
-        if (!ModelState.IsValid) return View(model);
+        if (model.OperadorId is not null && !await db.Operadores.AnyAsync(o => o.Id == model.OperadorId && o.OwnerId == currentUser.UserId, ct))
+            ModelState.AddModelError(nameof(model.OperadorId), "Operador inválido.");
+        if (!ModelState.IsValid)
+        {
+            await LoadOperadores();
+            return View(model);
+        }
         try
         {
-            var feed = await gtfs.UploadAsync(model.Ficheiro!, model.Nome.Trim(), model.Descricao, currentUser.UserId!, ct);
+            var feed = await gtfs.UploadAsync(model.Ficheiro!, model.Nome.Trim(), model.Descricao, currentUser.UserId!, model.OperadorId!.Value, ct);
             TempData[feed.Estado == GtfsFeedEstado.Invalido ? "Erro" : "Ok"] =
                 $"Feed carregado. Estado: {feed.Estado.DisplayName()}. Consulte o registo para detalhes.";
             return RedirectToAction(nameof(Details), new { id = feed.Id });
@@ -38,13 +50,14 @@ public class GtfsFeedsController(ApplicationDbContext db, GtfsFeedService gtfs, 
         {
             await log.LogAsync(CategoriaRegisto.Gtfs, "Carregamento", $"Carregamento rejeitado ({model.Ficheiro?.FileName}): {ex.Message}", NivelRegisto.Erro);
             ModelState.AddModelError(nameof(model.Ficheiro), ex.Message);
+            await LoadOperadores();
             return View(model);
         }
     }
 
     public async Task<IActionResult> Details(int id)
     {
-        var feed = await db.GtfsFeeds.Include(f => f.Owner).FirstOrDefaultAsync(f => f.Id == id);
+        var feed = await db.GtfsFeeds.Include(f => f.Owner).Include(f => f.Operador).FirstOrDefaultAsync(f => f.Id == id);
         if (feed is null) return NotFound();
         ViewBag.Registos = await db.Registos.Where(r => r.GtfsFeedId == id).OrderByDescending(r => r.Id)
             .Select(r => new RegistoRow(r.Id, r.Data.ToLocalTime(), r.Nivel.ToString(), r.Categoria, r.Acao, r.Mensagem, r.GtfsFeedId, r.UserName, null))
@@ -62,12 +75,24 @@ public class GtfsFeedsController(ApplicationDbContext db, GtfsFeedService gtfs, 
         return PhysicalFile(path, "application/zip", feed.NomeFicheiroOriginal);
     }
 
+    /// <summary>GTFS filtrado só com as viagens que passam no TIC.</summary>
+    public async Task<IActionResult> DownloadTic(int id)
+    {
+        var feed = await db.GtfsFeeds.FindAsync(id);
+        if (feed is null) return NotFound();
+        var path = gtfs.GetFullPathFiltrado(feed);
+        if (path is null || !System.IO.File.Exists(path)) return NotFound();
+        await log.LogAsync(CategoriaRegisto.Gtfs, "Descarga", $"GTFS filtrado TIC do feed \"{feed.Nome}\" descarregado.", gtfsFeedId: feed.Id, ownerId: feed.OwnerId);
+        return PhysicalFile(path, "application/zip", Path.GetFileNameWithoutExtension(feed.NomeFicheiroOriginal) + "_TIC.zip");
+    }
+
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Revalidar(int id, CancellationToken ct)
     {
         var feed = await db.GtfsFeeds.FindAsync([id], ct);
         if (feed is null) return NotFound();
         await gtfs.ValidateAsync(feed, ct);
+        await gtfs.FiltrarTicAsync(feed, ct);
         TempData["Ok"] = $"Validação concluída: {feed.Estado.DisplayName()}.";
         return RedirectToAction(nameof(Details), new { id });
     }
@@ -81,4 +106,8 @@ public class GtfsFeedsController(ApplicationDbContext db, GtfsFeedService gtfs, 
         TempData["Ok"] = "Feed eliminado.";
         return RedirectToAction(nameof(Index));
     }
+
+    private async Task LoadOperadores() =>
+        ViewBag.Operadores = await db.Operadores.Where(o => o.OwnerId == currentUser.UserId).OrderBy(o => o.Designacao)
+            .Select(o => new LookupItem(o.Id.ToString(), o.Nif + " – " + (o.Abreviatura ?? o.Designacao))).ToListAsync();
 }

@@ -269,6 +269,11 @@ namespace AppTIC.Web.Data.Migrations
                         .HasColumnType("character varying(500)")
                         .HasColumnName("caminho_armazenamento");
 
+                    b.Property<string>("CaminhoFiltrado")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("caminho_filtrado");
+
                     b.Property<DateTime>("CriadoEm")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("criado_em");
@@ -316,22 +321,47 @@ namespace AppTIC.Web.Data.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("num_horarios");
 
+                    b.Property<int>("NumHorariosTic")
+                        .HasColumnType("integer")
+                        .HasColumnName("num_horarios_tic");
+
                     b.Property<int>("NumParagens")
                         .HasColumnType("integer")
                         .HasColumnName("num_paragens");
+
+                    b.Property<int>("NumParagensTic")
+                        .HasColumnType("integer")
+                        .HasColumnName("num_paragens_tic");
 
                     b.Property<int>("NumRotas")
                         .HasColumnType("integer")
                         .HasColumnName("num_rotas");
 
+                    b.Property<int>("NumRotasTic")
+                        .HasColumnType("integer")
+                        .HasColumnName("num_rotas_tic");
+
                     b.Property<int>("NumViagens")
                         .HasColumnType("integer")
                         .HasColumnName("num_viagens");
+
+                    b.Property<int>("NumViagensTic")
+                        .HasColumnType("integer")
+                        .HasColumnName("num_viagens_tic");
+
+                    b.Property<int?>("OperadorId")
+                        .HasColumnType("integer")
+                        .HasColumnName("operador_id");
 
                     b.Property<string>("OwnerId")
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("owner_id");
+
+                    b.Property<string>("ParagensTic")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("paragens_tic");
 
                     b.Property<string>("Sha256")
                         .IsRequired()
@@ -343,6 +373,10 @@ namespace AppTIC.Web.Data.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("tamanho_bytes");
 
+                    b.Property<long?>("TamanhoFiltradoBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("tamanho_filtrado_bytes");
+
                     b.Property<string>("Versao")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
@@ -350,6 +384,9 @@ namespace AppTIC.Web.Data.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_gtfs_feeds");
+
+                    b.HasIndex("OperadorId")
+                        .HasDatabaseName("ix_gtfs_feeds_operador_id");
 
                     b.HasIndex("OwnerId")
                         .HasDatabaseName("ix_gtfs_feeds_owner_id");
@@ -405,6 +442,11 @@ namespace AppTIC.Web.Data.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)")
                         .HasColumnName("designacao");
+
+                    b.Property<string>("GtfsParagensTic")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("gtfs_paragens_tic");
 
                     b.Property<string>("Nif")
                         .IsRequired()
@@ -790,12 +832,20 @@ namespace AppTIC.Web.Data.Migrations
 
             modelBuilder.Entity("AppTIC.Web.Models.Domain.GtfsFeed", b =>
                 {
+                    b.HasOne("AppTIC.Web.Models.Domain.Operador", "Operador")
+                        .WithMany("GtfsFeeds")
+                        .HasForeignKey("OperadorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_gtfs_feeds_operadores_operador_id");
+
                     b.HasOne("AppTIC.Web.Models.Domain.ApplicationUser", "Owner")
                         .WithMany()
                         .HasForeignKey("OwnerId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_gtfs_feeds_users_owner_id");
+
+                    b.Navigation("Operador");
 
                     b.Navigation("Owner");
                 });
@@ -937,6 +987,8 @@ namespace AppTIC.Web.Data.Migrations
             modelBuilder.Entity("AppTIC.Web.Models.Domain.Operador", b =>
                 {
                     b.Navigation("Circulacoes");
+
+                    b.Navigation("GtfsFeeds");
                 });
 #pragma warning restore 612, 618
         }

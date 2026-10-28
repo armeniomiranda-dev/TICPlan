@@ -26,6 +26,7 @@
     <e-grid-pagesettings pageSize="20"></e-grid-pagesettings>
     <e-grid-columns>
         <e-grid-column field="Nome" headerText="Nome" template="#nomeTemplate" width="200"></e-grid-column>
+        <e-grid-column field="Operador" headerText="Operador" width="140"></e-grid-column>
         <e-grid-column field="Ficheiro" headerText="Ficheiro" width="180"></e-grid-column>
         <e-grid-column field="TamanhoMb" headerText="MB" format="N2" textAlign="Right" width="80"></e-grid-column>
         <e-grid-column field="Estado" headerText="Estado" template="#estadoTemplate" width="140"></e-grid-column>
@@ -33,6 +34,7 @@
         <e-grid-column field="DataFim" headerText="Fim" type="date" format="dd/MM/yyyy" width="110"></e-grid-column>
         <e-grid-column field="NumRotas" headerText="Rotas" textAlign="Right" width="80"></e-grid-column>
         <e-grid-column field="NumViagens" headerText="Viagens" textAlign="Right" width="90"></e-grid-column>
+        <e-grid-column field="NumViagensTic" headerText="Viagens TIC" textAlign="Right" width="105"></e-grid-column>
         <e-grid-column field="CriadoEm" headerText="Carregado em" type="datetime" format="dd/MM/yyyy HH:mm" width="150"></e-grid-column>
         <e-grid-column field="Dono" headerText="Utilizador" visible="@isAdmin" width="180"></e-grid-column>
         <e-grid-column headerText="" template="#feedAcoesTemplate" width="100" allowFiltering="false" allowSorting="false"></e-grid-column>

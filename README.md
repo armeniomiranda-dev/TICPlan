@@ -63,3 +63,10 @@ Migrações: `dotnet tool restore && dotnet ef migrations add <Nome> -p src/AppT
 Carregar um .zip guarda o ficheiro, calcula o SHA-256 (avisa se for duplicado) e valida: ficheiros obrigatórios
 (agency, stops, routes, trips, stop_times, calendar e/ou calendar_dates), cabeçalhos, contagens e datas/versão do
 `feed_info.txt`. Cada passo (carregamento, validação, descarga, eliminação) fica no registo do feed e no registo do login.
+
+Cada feed é associado a um **operador**. Depois da validação é gerado um **GTFS filtrado TIC**, com a mesma lógica do
+GTFS_Agg: viagens com pelo menos um `stop_time` numa paragem do TIC → os seus `stop_times`, `trips`, `routes`, `stops`
+(e estações-mãe), `calendar`/`calendar_dates`, `shapes`, `frequencies` e `transfers` referenciados. As paragens do TIC são
+os `stop_id` definidos na ficha do operador (campo "Paragens do TIC no GTFS"); se estiver vazio, usa
+`Gtfs:ParagensTicPorOmissao` do `appsettings.json` (RNE `100`, FlixBus `cd022a5c-…`, CP `94_2006`, STCP `TIC1-3`/`CMP1,2,5,6`,
+Metro `5703`). Os `stop_id` são os originais de cada feed, sem o sufixo de origem (`_S2JE`, `_5G5E`, …) que o GTFS_Agg acrescenta.

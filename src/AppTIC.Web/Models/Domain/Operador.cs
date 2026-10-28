@@ -26,5 +26,17 @@ public class Operador : OwnedEntity
     [Display(Name = "Comentários")]
     public string? Comentarios { get; set; }
 
+    /// <summary>
+    /// stop_id(s) da paragem do TIC no GTFS deste operador (separados por vírgula ou linha), ex. "100" na RNE.
+    /// Vazio = usa a lista Gtfs:ParagensTicPorOmissao.
+    /// </summary>
+    [StringLength(1000), Display(Name = "Paragens do TIC no GTFS (stop_id)")]
+    public string? GtfsParagensTic { get; set; }
+
     public List<Circulacao> Circulacoes { get; set; } = [];
+    public List<GtfsFeed> GtfsFeeds { get; set; } = [];
+
+    public static IReadOnlyList<string> SplitStopIds(string? value) =>
+        (value ?? "").Split([',', ';', '\n', '\r'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct().ToList();
 }

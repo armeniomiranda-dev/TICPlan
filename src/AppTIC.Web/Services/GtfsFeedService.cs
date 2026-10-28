@@ -17,6 +17,9 @@ public class GtfsOptions
     public string StoragePath { get; set; } = "App_Data/gtfs";
 
     public long MaxUploadBytes { get; set; } = 200L * 1024 * 1024;
+
+    /// <summary>stop_id(s) do TIC usados quando o operador não tem os seus definidos.</summary>
+    public List<string> ParagensTicPorOmissao { get; set; } = [];
 }
 
 public record GtfsValidationIssue(NivelRegisto Nivel, string Mensagem);
@@ -35,7 +38,17 @@ public class GtfsFeedService(
 
     public string GetFullPath(GtfsFeed feed) => Path.Combine(Root, feed.CaminhoArmazenamento);
 
-    public async Task<GtfsFeed> UploadAsync(IFormFile file, string nome, string? descricao, string ownerId, CancellationToken ct = default)
+    public string? GetFullPathFiltrado(GtfsFeed feed) =>
+        feed.CaminhoFiltrado is null ? null : Path.Combine(Root, feed.CaminhoFiltrado);
+
+    /// <summary>stop_id(s) do TIC para o operador (os do operador ou, se vazio, os da configuração).</summary>
+    public IReadOnlyList<string> ParagensTic(Operador? operador)
+    {
+        var proprias = Operador.SplitStopIds(operador?.GtfsParagensTic);
+        return proprias.Count > 0 ? proprias : options.Value.ParagensTicPorOmissao;
+    }
+
+    public async Task<GtfsFeed> UploadAsync(IFormFile file, string nome, string? descricao, string ownerId, int operadorId, CancellationToken ct = default)
     {
         if (!file.FileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("O feed GTFS tem de ser um ficheiro .zip.");
@@ -67,6 +80,7 @@ public class GtfsFeedService(
         var feed = new GtfsFeed
         {
             OwnerId = ownerId,
+            OperadorId = operadorId,
             Nome = nome,
             Descricao = descricao,
             NomeFicheiroOriginal = Path.GetFileName(file.FileName),
@@ -85,7 +99,63 @@ public class GtfsFeedService(
             duplicate ? NivelRegisto.Aviso : NivelRegisto.Info, feed.Id, ownerId);
 
         await ValidateAsync(feed, ct);
+        await FiltrarTicAsync(feed, ct);
         return feed;
+    }
+
+    /// <summary>Gera o GTFS filtrado com as viagens que passam nas paragens do TIC do operador.</summary>
+    public async Task FiltrarTicAsync(GtfsFeed feed, CancellationToken ct = default)
+    {
+        var anterior = GetFullPathFiltrado(feed);
+        if (anterior is not null && File.Exists(anterior)) File.Delete(anterior);
+        feed.CaminhoFiltrado = null;
+        feed.TamanhoFiltradoBytes = null;
+        feed.NumViagensTic = feed.NumHorariosTic = feed.NumRotasTic = feed.NumParagensTic = 0;
+
+        var operador = feed.OperadorId is null ? null : await db.Operadores.FindAsync([feed.OperadorId], ct);
+        var paragens = ParagensTic(operador);
+        feed.ParagensTic = string.Join(", ", paragens);
+
+        if (feed.Estado == GtfsFeedEstado.Invalido || paragens.Count == 0)
+        {
+            await db.SaveChangesAsync(ct);
+            await log.LogAsync(CategoriaRegisto.Gtfs, "Filtragem TIC",
+                paragens.Count == 0
+                    ? "Sem paragens do TIC definidas (no operador nem em Gtfs:ParagensTicPorOmissao); feed não filtrado."
+                    : "Feed inválido; filtragem do TIC não executada.",
+                NivelRegisto.Aviso, feed.Id, feed.OwnerId);
+            return;
+        }
+
+        var relativo = Path.ChangeExtension(feed.CaminhoArmazenamento, null) + "_tic.zip";
+        var destino = Path.Combine(Root, relativo);
+        try
+        {
+            var r = await Task.Run(() => GtfsTicFilter.Filter(GetFullPath(feed), destino, paragens), ct);
+            feed.CaminhoFiltrado = relativo;
+            feed.TamanhoFiltradoBytes = new FileInfo(destino).Length;
+            feed.NumViagensTic = r.Viagens;
+            feed.NumHorariosTic = r.Horarios;
+            feed.NumRotasTic = r.Rotas;
+            feed.NumParagensTic = r.Paragens;
+            await db.SaveChangesAsync(ct);
+
+            var origem = Operador.SplitStopIds(operador?.GtfsParagensTic).Count > 0 ? "do operador" : "por omissão";
+            await log.LogAsync(CategoriaRegisto.Gtfs, "Filtragem TIC",
+                r.ParagensTicEncontradas.Count == 0
+                    ? $"Nenhuma das paragens do TIC ({origem}: {feed.ParagensTic}) existe no stops.txt deste feed."
+                    : $"Paragens do TIC no feed: {string.Join("; ", r.ParagensTicEncontradas.Select(p => $"{p.StopId} – {p.Nome}"))}.",
+                r.ParagensTicEncontradas.Count == 0 ? NivelRegisto.Aviso : NivelRegisto.Info, feed.Id, feed.OwnerId);
+            await log.LogAsync(CategoriaRegisto.Gtfs, "Filtragem TIC",
+                $"GTFS filtrado: {r.Viagens} viagens que passam no TIC, {r.Horarios} horários, {r.Rotas} rotas, {r.Paragens} paragens.",
+                r.Viagens == 0 ? NivelRegisto.Aviso : NivelRegisto.Info, feed.Id, feed.OwnerId);
+        }
+        catch (Exception ex) when (ex is InvalidDataException or IOException or CsvHelper.CsvHelperException)
+        {
+            if (File.Exists(destino)) File.Delete(destino);
+            await db.SaveChangesAsync(ct);
+            await log.LogAsync(CategoriaRegisto.Gtfs, "Filtragem TIC", $"Erro na filtragem: {ex.Message}", NivelRegisto.Erro, feed.Id, feed.OwnerId);
+        }
     }
 
     /// <summary>Validação estrutural: ficheiros obrigatórios, cabeçalhos e contagens.</summary>
@@ -143,8 +213,8 @@ public class GtfsFeedService(
 
     public async Task DeleteAsync(GtfsFeed feed, CancellationToken ct = default)
     {
-        var path = GetFullPath(feed);
-        if (File.Exists(path)) File.Delete(path);
+        foreach (var path in new[] { GetFullPath(feed), GetFullPathFiltrado(feed) })
+            if (path is not null && File.Exists(path)) File.Delete(path);
 
         await log.LogAsync(CategoriaRegisto.Gtfs, "Eliminação",
             $"Feed \"{feed.Nome}\" ({feed.NomeFicheiroOriginal}) eliminado.", NivelRegisto.Aviso, null, feed.OwnerId);

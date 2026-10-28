@@ -1,6 +1,14 @@
 @model GtfsUploadViewModel
-@{ ViewData["Title"] = "Carregar feed GTFS"; }
+@{
+    ViewData["Title"] = "Carregar feed GTFS";
+    var operadores = (List<LookupItem>)ViewBag.Operadores;
+}
 <div class="page-header"><h1>Carregar feed GTFS</h1></div>
+
+@if (operadores.Count == 0)
+{
+    <div class="alert alert-warning">Ainda não tem operadores. <a asp-controller="Operadores" asp-action="Create">Crie o operador</a> antes de carregar o feed GTFS.</div>
+}
 
 <form asp-action="Upload" method="post" enctype="multipart/form-data" class="card card-form">
     <div class="card-body">
@@ -12,6 +20,14 @@
                 <span asp-validation-for="Nome" class="text-danger small"></span>
             </div>
             <div class="col-md-6">
+                <label asp-for="OperadorId" class="form-label"></label>
+                <ejs-dropdownlist id="OperadorId" name="OperadorId" dataSource="@operadores" value="@Model.OperadorId?.ToString()"
+                                  placeholder="Escolha o operador…" allowFiltering="true" filterType="Contains">
+                    <e-dropdownlist-fields text="Text" value="Value"></e-dropdownlist-fields>
+                </ejs-dropdownlist>
+                <span asp-validation-for="OperadorId" class="text-danger small"></span>
+            </div>
+            <div class="col-md-6">
                 <label asp-for="Ficheiro" class="form-label"></label>
                 <input asp-for="Ficheiro" type="file" accept=".zip,application/zip" class="form-control" />
                 <span asp-validation-for="Ficheiro" class="text-danger small"></span>
@@ -21,7 +37,7 @@
                 <textarea asp-for="Descricao" class="form-control" rows="2"></textarea>
             </div>
         </div>
-        <p class="form-text mt-3 mb-0">O ficheiro é guardado e validado: ficheiros obrigatórios (agency, stops, routes, trips, stop_times, calendar/calendar_dates), contagens e datas de feed_info.txt. Cada passo fica no registo do feed.</p>
+        <p class="form-text mt-3 mb-0">O ficheiro é guardado e validado: ficheiros obrigatórios (agency, stops, routes, trips, stop_times, calendar/calendar_dates), contagens e datas de feed_info.txt. Depois é gerado um GTFS filtrado só com as viagens que passam nas paragens do TIC do operador (stop_id definidos na ficha do operador). Cada passo fica no registo do feed. Feeds grandes (ex. FlixBus) podem demorar cerca de um minuto.</p>
     </div>
     <div class="card-footer d-flex gap-2">
         <button type="submit" class="btn btn-primary"><i class="bi bi-upload"></i> Carregar</button>
