@@ -1,0 +1,44 @@
+@model PedidoAlteracao
+@{
+    var c = (Circulacao)ViewBag.Circulacao;
+    ViewData["Title"] = $"Pedido de alteração · {c.ViagemId}";
+}
+<div class="page-header"><h1>Pedido de alteração <span class="text-primary">@c.ViagemId</span></h1></div>
+
+<form asp-action="Criar" method="post" class="card card-form" style="max-width: 760px">
+    <div class="card-body">
+        <input type="hidden" asp-for="CirculacaoId" />
+        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+        <p class="small text-muted">Chegada / partida no TIC em vigor: <strong>@(c.Chegada?.ToString("HH:mm") ?? "–") / @(c.Partida?.ToString("HH:mm") ?? "–")</strong>.
+            O pedido é analisado pela gestão do TIC, que faz a alteração na circulação.</p>
+        <div class="row g-3">
+            <div class="col-12">
+                <label asp-for="Descricao" class="form-label"></label>
+                <textarea asp-for="Descricao" class="form-control" rows="4" placeholder="Ex.: alterar a partida para 08:15 a partir de 1 de dezembro; deixa de se realizar aos domingos…"></textarea>
+                <span asp-validation-for="Descricao" class="text-danger small"></span>
+            </div>
+            <div class="col-md-3">
+                <label asp-for="DataInicio" class="form-label"></label>
+                <input asp-for="DataInicio" type="date" class="form-control" />
+            </div>
+            <div class="col-md-3">
+                <label asp-for="DataFim" class="form-label"></label>
+                <input asp-for="DataFim" type="date" class="form-control" />
+                <span asp-validation-for="DataFim" class="text-danger small"></span>
+            </div>
+            <div class="col-md-3">
+                <label asp-for="NovaChegada" class="form-label"></label>
+                <input asp-for="NovaChegada" type="time" class="form-control" value="@Model.NovaChegada?.ToString("HH:mm")" />
+            </div>
+            <div class="col-md-3">
+                <label asp-for="NovaPartida" class="form-label"></label>
+                <input asp-for="NovaPartida" type="time" class="form-control" value="@Model.NovaPartida?.ToString("HH:mm")" />
+            </div>
+        </div>
+        <div class="form-text mt-2">Datas e horas são opcionais; use-as quando o pedido é uma mudança de horário no TIC.</div>
+    </div>
+    <div class="card-footer d-flex gap-2">
+        <button type="submit" class="btn btn-primary"><i class="bi bi-send"></i> Enviar pedido</button>
+        <a asp-controller="Circulacoes" asp-action="Details" asp-route-id="@c.Id" class="btn btn-outline-secondary">Cancelar</a>
+    </div>
+</form>

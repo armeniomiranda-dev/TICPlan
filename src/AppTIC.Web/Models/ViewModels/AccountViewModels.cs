@@ -38,8 +38,12 @@ public class UtilizadorViewModel
     [StringLength(200), Display(Name = "Nome")]
     public string? NomeCompleto { get; set; }
 
-    [StringLength(200), Display(Name = "Entidade / operador")]
+    [StringLength(200), Display(Name = "Entidade")]
     public string? Entidade { get; set; }
+
+    /// <summary>Obrigatório no perfil Utilizador: só vê a informação deste operador.</summary>
+    [Display(Name = "Operador")]
+    public int? OperadorId { get; set; }
 
     [Required, Display(Name = "Perfil")]
     public string Perfil { get; set; } = Services.Roles.Utilizador;

@@ -19,14 +19,42 @@
     var novoFim = ultimoDia is { } ud && ud >= novoInicio ? ud : novoInicio.AddYears(1);
     string H(TimeOnly? t) => t?.ToString("HH:mm") ?? "–";
     var diasSemana = new[] { (1, "Seg"), (2, "Ter"), (3, "Qua"), (4, "Qui"), (5, "Sex"), (6, "Sáb"), (0, "Dom") };
+    // Só o Admin edita; os utilizadores do operador fazem pedidos de alteração.
+    var podeEditar = User.IsInRole(Roles.Admin);
+    var pedidos = (List<PedidoAlteracao>)ViewBag.Pedidos;
 }
 <div class="page-header">
     <h1>Circulação <span class="text-primary">@Model.ViagemId</span></h1>
     <div class="d-flex gap-2">
-        <a class="btn btn-outline-primary" asp-action="Edit" asp-route-id="@Model.Id"><i class="bi bi-pencil"></i> Editar</a>
+        @if (podeEditar)
+        {
+            <a class="btn btn-outline-primary" asp-action="Edit" asp-route-id="@Model.Id"><i class="bi bi-pencil"></i> Editar</a>
+        }
+        else
+        {
+            <a class="btn btn-primary" asp-controller="Pedidos" asp-action="Criar" asp-route-circulacaoId="@Model.Id"><i class="bi bi-pencil-square"></i> Pedido de alteração</a>
+        }
         <a class="btn btn-outline-secondary" asp-action="Index">Voltar</a>
     </div>
 </div>
+
+@if (pedidos.Count > 0)
+{
+    <div class="card mb-3">
+        <div class="card-header"><i class="bi bi-pencil-square"></i> Pedidos de alteração</div>
+        <ul class="list-group list-group-flush small">
+            @foreach (var p in pedidos)
+            {
+                <li class="list-group-item d-flex gap-3 align-items-start">
+                    <a asp-controller="Pedidos" asp-action="Details" asp-route-id="@p.Id" class="fw-semibold">#@p.Id</a>
+                    <span class="badge @(p.Estado == EstadoPedido.Pendente ? "text-bg-warning" : p.Estado == EstadoPedido.Aceite ? "text-bg-success" : "text-bg-secondary")">@p.Estado.DisplayName()</span>
+                    <span class="flex-grow-1">@p.Descricao</span>
+                    <span class="text-muted text-nowrap">@p.PedidoPor?.Email · @p.CriadoEm.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
+                </li>
+            }
+        </ul>
+    </div>
+}
 
 <div class="card mb-3">
     <div class="card-body row g-2 small">
@@ -46,6 +74,8 @@
 <div class="card mb-3 horario-tic">
     <div class="card-header"><i class="bi bi-clock-history"></i> Horas no Terminal de Campanhã <span class="text-muted small">(histórico por período)</span></div>
     <div class="card-body row g-3">
+        @if (podeEditar)
+        {
         <div class="col-lg-4">
             <p class="small text-muted mb-2">Definir as horas para um período. Os dias desse período deixam de usar o que estava definido; o resto do histórico mantém-se.</p>
             <div class="row g-2">
@@ -59,7 +89,8 @@
                 </div>
             </div>
         </div>
-        <div class="col-lg-8">
+        }
+        <div class="@(podeEditar ? "col-lg-8" : "col-12")">
             <div class="table-responsive">
                 <table class="table table-sm align-middle small mb-0">
                     <thead><tr><th>Data de início</th><th>Data de fim</th><th>Chegada</th><th>Partida</th><th>Origem</th><th>Registado</th><th></th></tr></thead>
@@ -75,10 +106,13 @@
                                 <td><span class="badge @(h.Origem == OrigemHorario.Manual ? "text-bg-warning" : "text-bg-secondary")">@h.Origem.DisplayName()</span></td>
                                 <td>@h.RegistadoEm.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
                                 <td class="text-end">
+                                    @if (podeEditar)
+                                    {
                                     <form asp-action="RemoverHorarioTic" asp-route-id="@Model.Id" asp-route-periodoId="@h.Id" method="post"
                                           onsubmit="return confirm('Remover este período do histórico?')">
                                         <button class="btn btn-sm btn-link text-danger p-0" title="Remover período"><i class="bi bi-trash"></i></button>
                                     </form>
+                                    }
                                 </td>
                             </tr>
                         }
@@ -97,10 +131,12 @@
     <div class="col-xl-8">
         <div class="card h-100">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <span><i class="bi bi-calendar-check"></i> Calendário <span class="text-muted small">(clique num dia para marcar/desmarcar; é pedida confirmação)</span></span>
+                <span><i class="bi bi-calendar-check"></i> Calendário @if (podeEditar) { <span class="text-muted small">(clique num dia para marcar/desmarcar; é pedida confirmação)</span> }</span>
                 <span class="badge text-bg-success" id="totalDias"></span>
             </div>
             <div class="card-body">
+                @if (podeEditar)
+                {
                 <div class="row g-2 align-items-end mb-3">
                     <div class="col-sm-3">
                         <label class="form-label small mb-0">De</label>
@@ -121,6 +157,7 @@
                         <button type="button" class="btn btn-sm btn-outline-danger" onclick="definirDias(false)"><i class="bi bi-x-lg"></i> Desmarcar dias</button>
                     </div>
                 </div>
+                }
                 <div id="calendarioCirculacao"></div>
             </div>
         </div>
@@ -130,11 +167,13 @@
             <div class="card-header"><i class="bi bi-signpost-2"></i> Percurso a partir do TIC</div>
             <div class="card-body">
                 <p class="small text-muted mb-2">Paragens a partir do Terminal de Campanhã (inclusive). As horas são só as do TIC, definidas acima.</p>
-                @if (ocultas > 0)
+                @if (podeEditar)
+                {
+                if (ocultas > 0)
                 {
                     <div class="alert alert-info small py-2">@ocultas paragem(ns) antes do TIC não são mostradas e saem do percurso ao guardar.</div>
                 }
-                @if (paragensTic.Count == 0)
+                if (paragensTic.Count == 0)
                 {
                     <div class="alert alert-warning small py-2">Não há nenhuma paragem com o código do TIC deste operador. Crie-a em <a asp-controller="Paragens" asp-action="Create">Paragens</a>.</div>
                 }
@@ -142,7 +181,7 @@
                 {
                     <div class="alert alert-warning small py-2">O percurso não inclui a paragem do TIC; tem de começar nela para ser guardado.</div>
                 }
-                @if (paragens.Count == 0)
+                if (paragens.Count == 0)
                 {
                     <div class="alert alert-warning small">Ainda não tem paragens. <a asp-controller="Paragens" asp-action="Create">Crie paragens</a> primeiro.</div>
                 }
@@ -154,9 +193,13 @@
                     </div>
                     <button type="button" class="btn btn-outline-primary" onclick="adicionarParagem()" title="Adicionar"><i class="bi bi-plus-lg"></i></button>
                 </div>
+                }
                 <ol class="list-group percurso-list mb-3" id="percurso"></ol>
-                <button type="button" class="btn btn-primary" onclick="guardarPercurso()"><i class="bi bi-check-lg"></i> Guardar percurso</button>
-                <span class="small ms-2" id="percursoEstado"></span>
+                @if (podeEditar)
+                {
+                    <button type="button" class="btn btn-primary" onclick="guardarPercurso()"><i class="bi bi-check-lg"></i> Guardar percurso</button>
+                    <span class="small ms-2" id="percursoEstado"></span>
+                }
             </div>
         </div>
     </div>
@@ -167,6 +210,7 @@
     <script src="~/lib/fullcalendar/locales/pt.global.min.js"></script>
     <script>
         const circulacaoId = @Model.Id;
+        const podeEditar = @Json.Serialize(podeEditar);
         let calendar;
         const diasMarcados = new Set();
 
@@ -183,6 +227,7 @@
                         .catch(failure);
                 },
                 dateClick: async function (info) {
+                    if (!podeEditar) return;
                     const realiza = !diasMarcados.has(info.dateStr);
                     const dia = info.date.toLocaleDateString('pt-PT', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
                     if (!confirm(realiza ? `Marcar ${dia} como dia em que a circulação se realiza?` : `Desmarcar ${dia} (a circulação deixa de se realizar)?`)) return;
@@ -245,6 +290,7 @@
                     if (i === 0) nome.insertAdjacentHTML('beforeend', `<div class="percurso-tic-horas">Cheg. / Part. ${horasTic}</div>`);
                 }
                 const [up, down, del] = li.querySelectorAll('button');
+                if (!podeEditar) { [up, down, del].forEach(b => b.remove()); ol.appendChild(li); return; }
                 up.onclick = () => mover(i, -1);
                 down.onclick = () => mover(i, 1);
                 del.onclick = () => { percurso.splice(i, 1); renderPercurso(); };

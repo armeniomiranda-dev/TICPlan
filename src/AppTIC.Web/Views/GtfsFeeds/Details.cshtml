@@ -2,6 +2,7 @@
 @{
     ViewData["Title"] = $"Feed {Model.Nome}";
     var registos = (List<RegistoRow>)ViewBag.Registos;
+    var isAdmin = User.IsInRole(Roles.Admin);
 }
 <div class="page-header">
     <h1>@Model.Nome <span class="badge badge-estado-@Model.Estado fs-6 align-middle">@Model.Estado.DisplayName()</span></h1>
@@ -10,13 +11,16 @@
         @if (Model.CaminhoFiltrado is not null)
         {
             <a class="btn btn-primary" asp-action="DownloadTic" asp-route-id="@Model.Id"><i class="bi bi-funnel"></i> GTFS filtrado TIC</a>
-            @if (Model.OperadorId is not null)
+            @if (Model.OperadorId is not null && isAdmin)
             {
                 <a class="btn btn-success" asp-action="Importar" asp-route-id="@Model.Id"><i class="bi bi-box-arrow-in-down"></i> Importar paragens e circulações</a>
             }
         }
-        <form asp-action="Revalidar" asp-route-id="@Model.Id" method="post"><button class="btn btn-outline-secondary"><i class="bi bi-arrow-repeat"></i> Validar e filtrar de novo</button></form>
-        <button type="button" class="btn btn-outline-danger" onclick="appTic.postConfirm('@Url.Action("Delete", new { id = Model.Id })', 'Eliminar este feed GTFS? O ficheiro será apagado.')"><i class="bi bi-trash"></i> Eliminar</button>
+        @if (isAdmin)
+        {
+            <form asp-action="Revalidar" asp-route-id="@Model.Id" method="post"><button class="btn btn-outline-secondary"><i class="bi bi-arrow-repeat"></i> Validar e filtrar de novo</button></form>
+            <button type="button" class="btn btn-outline-danger" onclick="appTic.postConfirm('@Url.Action("Delete", new { id = Model.Id })', 'Eliminar este feed GTFS? O ficheiro será apagado.')"><i class="bi bi-trash"></i> Eliminar</button>
+        }
         <a class="btn btn-outline-secondary" asp-action="Index">Voltar</a>
     </div>
 </div>

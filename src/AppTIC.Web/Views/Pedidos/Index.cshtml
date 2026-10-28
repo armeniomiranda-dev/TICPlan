@@ -1,0 +1,33 @@
+@model List<PedidoRow>
+@{
+    ViewData["Title"] = "Pedidos de alteração";
+}
+<div class="page-header">
+    <h1>Pedidos de alteração</h1>
+</div>
+
+<script id="pedidoTemplate" type="text/x-template">
+    <a href="@Url.Action("Details")/${Id}" class="fw-semibold">#${Id}</a>
+</script>
+<script id="pedidoViagemTemplate" type="text/x-template">
+    <a href="@Url.Action("Details", "Circulacoes")/${CirculacaoId}">${ViagemId}</a>
+</script>
+<script id="pedidoEstadoTemplate" type="text/x-template">
+    ${if(Estado === 'Pendente')}<span class="badge text-bg-warning">${Estado}</span>${else}<span class="badge text-bg-secondary">${Estado}</span>${/if}
+</script>
+
+<ejs-grid id="grid" dataSource="@Model" allowPaging="true" allowSorting="true" allowFiltering="true" allowExcelExport="true"
+          allowResizing="true" toolbar="@(new List<string> { "Search", "ExcelExport" })" toolbarClick="appTic.gridToolbarClick">
+    <e-grid-filtersettings type="Excel"></e-grid-filtersettings>
+    <e-grid-pagesettings pageSize="25"></e-grid-pagesettings>
+    <e-grid-columns>
+        <e-grid-column field="Id" headerText="Pedido" template="#pedidoTemplate" width="90"></e-grid-column>
+        <e-grid-column field="Estado" headerText="Estado" template="#pedidoEstadoTemplate" width="110"></e-grid-column>
+        <e-grid-column field="ViagemId" headerText="Circulação" template="#pedidoViagemTemplate" width="130"></e-grid-column>
+        <e-grid-column field="Operador" headerText="Operador" width="140"></e-grid-column>
+        <e-grid-column field="Descricao" headerText="Alteração pretendida" width="320"></e-grid-column>
+        <e-grid-column field="PedidoPor" headerText="Pedido por" width="180"></e-grid-column>
+        <e-grid-column field="CriadoEm" headerText="Pedido em" type="datetime" format="dd/MM/yyyy HH:mm" width="140"></e-grid-column>
+        <e-grid-column field="RespondidoEm" headerText="Respondido em" type="datetime" format="dd/MM/yyyy HH:mm" width="140"></e-grid-column>
+    </e-grid-columns>
+</ejs-grid>

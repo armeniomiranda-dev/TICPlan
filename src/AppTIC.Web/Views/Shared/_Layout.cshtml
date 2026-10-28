@@ -32,14 +32,18 @@
                     </button>
                     <div class="collapse navbar-collapse" id="mainNav">
                         <ul class="navbar-nav me-auto">
-                            <li class="nav-item"><a class="nav-link @Active("Operadores")" asp-controller="Operadores" asp-action="Index"><i class="bi bi-building"></i> Operadores</a></li>
-                            <li class="nav-item"><a class="nav-link @Active("Paragens")" asp-controller="Paragens" asp-action="Index"><i class="bi bi-geo-alt"></i> Paragens</a></li>
-                            <li class="nav-item"><a class="nav-link @Active("Circulacoes")" asp-controller="Circulacoes" asp-action="Index"><i class="bi bi-bus-front"></i> Circulações</a></li>
-                            <li class="nav-item"><a class="nav-link @Active("Calendario")" asp-controller="Calendario" asp-action="Index"><i class="bi bi-calendar3"></i> Calendário</a></li>
-                            <li class="nav-item"><a class="nav-link @Active("GtfsFeeds")" asp-controller="GtfsFeeds" asp-action="Index"><i class="bi bi-file-earmark-zip"></i> Feeds GTFS</a></li>
-                            <li class="nav-item"><a class="nav-link @Active("Registos")" asp-controller="Registos" asp-action="Index"><i class="bi bi-journal-text"></i> Registos</a></li>
                             @if (isAdmin)
                             {
+                                <li class="nav-item"><a class="nav-link @Active("Operadores")" asp-controller="Operadores" asp-action="Index"><i class="bi bi-building"></i> Operadores</a></li>
+                            }
+                            <li class="nav-item"><a class="nav-link @Active("Paragens")" asp-controller="Paragens" asp-action="Index"><i class="bi bi-geo-alt"></i> Paragens</a></li>
+                            <li class="nav-item"><a class="nav-link @Active("Circulacoes")" asp-controller="Circulacoes" asp-action="Index"><i class="bi bi-bus-front"></i> Circulações</a></li>
+                            <li class="nav-item"><a class="nav-link @Active("Pedidos")" asp-controller="Pedidos" asp-action="Index"><i class="bi bi-pencil-square"></i> Pedidos</a></li>
+                            <li class="nav-item"><a class="nav-link @Active("Calendario")" asp-controller="Calendario" asp-action="Index"><i class="bi bi-calendar3"></i> Calendário</a></li>
+                            <li class="nav-item"><a class="nav-link @Active("GtfsFeeds")" asp-controller="GtfsFeeds" asp-action="Index"><i class="bi bi-file-earmark-zip"></i> Feeds GTFS</a></li>
+                            @if (isAdmin)
+                            {
+                                <li class="nav-item"><a class="nav-link @Active("Registos")" asp-controller="Registos" asp-action="Index"><i class="bi bi-journal-text"></i> Registos</a></li>
                                 <li class="nav-item"><a class="nav-link @Active("Admin")" asp-controller="Admin" asp-action="Utilizadores"><i class="bi bi-people"></i> Utilizadores</a></li>
                             }
                         </ul>
@@ -48,6 +52,7 @@
                                 <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                     <i class="bi bi-person-circle"></i> @User.Identity!.Name
                                     @if (isAdmin) { <span class="badge text-bg-warning ms-1">Admin</span> }
+                                    else if (User.FindFirst(AppClaims.OperadorNome)?.Value is { } operador) { <span class="badge text-bg-light ms-1">@operador</span> }
                                 </a>
                                 <ul class="dropdown-menu dropdown-menu-end">
                                     <li><a class="dropdown-item" asp-controller="Account" asp-action="AlterarPassword">Alterar palavra-passe</a></li>

@@ -3,11 +3,14 @@ using AppTIC.Web.Data;
 using AppTIC.Web.Models.Domain;
 using AppTIC.Web.Models.ViewModels;
 using AppTIC.Web.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace AppTIC.Web.Controllers;
 
+/// <summary>Gestão dos operadores (só Admin; os utilizadores estão associados a um operador).</summary>
+[Authorize(Roles = Roles.Admin)]
 public class OperadoresController(ApplicationDbContext db, ICurrentUser currentUser, IActivityLog log) : Controller
 {
     public async Task<IActionResult> Index()

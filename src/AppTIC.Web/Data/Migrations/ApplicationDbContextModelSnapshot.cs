@@ -80,6 +80,10 @@ namespace AppTIC.Web.Data.Migrations
                         .HasColumnType("character varying(256)")
                         .HasColumnName("normalized_user_name");
 
+                    b.Property<int?>("OperadorId")
+                        .HasColumnType("integer")
+                        .HasColumnName("operador_id");
+
                     b.Property<string>("PasswordHash")
                         .HasColumnType("text")
                         .HasColumnName("password_hash");
@@ -114,6 +118,9 @@ namespace AppTIC.Web.Data.Migrations
                     b.HasIndex("NormalizedUserName")
                         .IsUnique()
                         .HasDatabaseName("UserNameIndex");
+
+                    b.HasIndex("OperadorId")
+                        .HasDatabaseName("ix_asp_net_users_operador_id");
 
                     b.ToTable("asp_net_users", (string)null);
                 });
@@ -585,6 +592,83 @@ namespace AppTIC.Web.Data.Migrations
                     b.ToTable("paragens", (string)null);
                 });
 
+            modelBuilder.Entity("AppTIC.Web.Models.Domain.PedidoAlteracao", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CirculacaoId")
+                        .HasColumnType("integer")
+                        .HasColumnName("circulacao_id");
+
+                    b.Property<DateTime>("CriadoEm")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("criado_em");
+
+                    b.Property<DateOnly?>("DataFim")
+                        .HasColumnType("date")
+                        .HasColumnName("data_fim");
+
+                    b.Property<DateOnly?>("DataInicio")
+                        .HasColumnType("date")
+                        .HasColumnName("data_inicio");
+
+                    b.Property<string>("Descricao")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("descricao");
+
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("estado");
+
+                    b.Property<TimeOnly?>("NovaChegada")
+                        .HasColumnType("time without time zone")
+                        .HasColumnName("nova_chegada");
+
+                    b.Property<TimeOnly?>("NovaPartida")
+                        .HasColumnType("time without time zone")
+                        .HasColumnName("nova_partida");
+
+                    b.Property<string>("PedidoPorId")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("pedido_por_id");
+
+                    b.Property<DateTime?>("RespondidoEm")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("respondido_em");
+
+                    b.Property<string>("RespondidoPor")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("respondido_por");
+
+                    b.Property<string>("Resposta")
+                        .HasColumnType("text")
+                        .HasColumnName("resposta");
+
+                    b.HasKey("Id")
+                        .HasName("pk_pedidos_alteracao");
+
+                    b.HasIndex("CirculacaoId")
+                        .HasDatabaseName("ix_pedidos_alteracao_circulacao_id");
+
+                    b.HasIndex("PedidoPorId")
+                        .HasDatabaseName("ix_pedidos_alteracao_pedido_por_id");
+
+                    b.HasIndex("Estado", "CriadoEm")
+                        .HasDatabaseName("ix_pedidos_alteracao_estado_criado_em");
+
+                    b.ToTable("pedidos_alteracao", (string)null);
+                });
+
             modelBuilder.Entity("AppTIC.Web.Models.Domain.PercursoParagem", b =>
                 {
                     b.Property<int>("CirculacaoId")
@@ -839,6 +923,17 @@ namespace AppTIC.Web.Data.Migrations
                     b.ToTable("asp_net_user_tokens", (string)null);
                 });
 
+            modelBuilder.Entity("AppTIC.Web.Models.Domain.ApplicationUser", b =>
+                {
+                    b.HasOne("AppTIC.Web.Models.Domain.Operador", "Operador")
+                        .WithMany()
+                        .HasForeignKey("OperadorId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_asp_net_users_operadores_operador_id");
+
+                    b.Navigation("Operador");
+                });
+
             modelBuilder.Entity("AppTIC.Web.Models.Domain.Circulacao", b =>
                 {
                     b.HasOne("AppTIC.Web.Models.Domain.Paragem", "Destino")
@@ -935,7 +1030,7 @@ namespace AppTIC.Web.Data.Migrations
                         .HasForeignKey("OwnerId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
-                        .HasConstraintName("fk_operadores_users_owner_id");
+                        .HasConstraintName("fk_operadores_asp_net_users_owner_id");
 
                     b.Navigation("Owner");
                 });
@@ -950,6 +1045,27 @@ namespace AppTIC.Web.Data.Migrations
                         .HasConstraintName("fk_paragens_users_owner_id");
 
                     b.Navigation("Owner");
+                });
+
+            modelBuilder.Entity("AppTIC.Web.Models.Domain.PedidoAlteracao", b =>
+                {
+                    b.HasOne("AppTIC.Web.Models.Domain.Circulacao", "Circulacao")
+                        .WithMany()
+                        .HasForeignKey("CirculacaoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_pedidos_alteracao_circulacoes_circulacao_id");
+
+                    b.HasOne("AppTIC.Web.Models.Domain.ApplicationUser", "PedidoPor")
+                        .WithMany()
+                        .HasForeignKey("PedidoPorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pedidos_alteracao_users_pedido_por_id");
+
+                    b.Navigation("Circulacao");
+
+                    b.Navigation("PedidoPor");
                 });
 
             modelBuilder.Entity("AppTIC.Web.Models.Domain.PercursoParagem", b =>

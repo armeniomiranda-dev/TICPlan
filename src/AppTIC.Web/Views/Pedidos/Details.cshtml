@@ -1,0 +1,51 @@
+@model PedidoAlteracao
+@{
+    ViewData["Title"] = $"Pedido #{Model.Id}";
+    var isAdmin = User.IsInRole(Roles.Admin);
+    var c = Model.Circulacao!;
+    string H(TimeOnly? t) => t?.ToString("HH:mm") ?? "–";
+    string D(DateOnly? d) => d?.ToString("dd/MM/yyyy") ?? "–";
+    var badge = Model.Estado switch { EstadoPedido.Pendente => "text-bg-warning", EstadoPedido.Aceite => "text-bg-success", _ => "text-bg-secondary" };
+}
+<div class="page-header">
+    <h1>Pedido #@Model.Id <span class="badge @badge fs-6 align-middle">@Model.Estado.DisplayName()</span></h1>
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-primary" asp-controller="Circulacoes" asp-action="Details" asp-route-id="@c.Id"><i class="bi bi-bus-front"></i> Circulação @c.ViagemId</a>
+        <a class="btn btn-outline-secondary" asp-action="Index">Voltar</a>
+    </div>
+</div>
+
+<div class="card mb-3" style="max-width: 900px">
+    <div class="card-body row g-2 small">
+        <div class="col-md-4"><span class="text-muted">Operador</span><br />@c.Operador?.Designacao</div>
+        <div class="col-md-4"><span class="text-muted">Pedido por</span><br />@Model.PedidoPor?.Email</div>
+        <div class="col-md-4"><span class="text-muted">Pedido em</span><br />@Model.CriadoEm.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div>
+        <div class="col-12"><span class="text-muted">Alteração pretendida</span><div style="white-space: pre-wrap">@Model.Descricao</div></div>
+        <div class="col-md-4"><span class="text-muted">Período</span><br />@D(Model.DataInicio) a @D(Model.DataFim)</div>
+        <div class="col-md-4"><span class="text-muted">Chegada / partida pedidas</span><br /><span class="fw-bold">@H(Model.NovaChegada) / @H(Model.NovaPartida)</span></div>
+        <div class="col-md-4"><span class="text-muted">Em vigor</span><br />@H(c.Chegada) / @H(c.Partida)</div>
+        @if (Model.Estado != EstadoPedido.Pendente)
+        {
+            <div class="col-12 border-top pt-2">
+                <span class="text-muted">Resposta (@Model.RespondidoPor, @Model.RespondidoEm?.ToLocalTime().ToString("dd/MM/yyyy HH:mm"))</span>
+                <div style="white-space: pre-wrap">@(Model.Resposta ?? "–")</div>
+            </div>
+        }
+    </div>
+</div>
+
+@if (isAdmin)
+{
+    <form asp-action="Responder" asp-route-id="@Model.Id" method="post" class="card card-form" style="max-width: 900px">
+        <div class="card-header">Responder</div>
+        <div class="card-body">
+            <p class="small text-muted">A resposta não altera a circulação: faça a alteração na <a asp-controller="Circulacoes" asp-action="Details" asp-route-id="@c.Id">circulação</a> e registe aqui a decisão.</p>
+            <label class="form-label" for="resposta">Resposta</label>
+            <textarea class="form-control" id="resposta" name="resposta" rows="3">@Model.Resposta</textarea>
+        </div>
+        <div class="card-footer d-flex gap-2">
+            <button type="submit" name="estado" value="@EstadoPedido.Aceite" class="btn btn-success"><i class="bi bi-check-lg"></i> Aceitar</button>
+            <button type="submit" name="estado" value="@EstadoPedido.Rejeitado" class="btn btn-outline-danger"><i class="bi bi-x-lg"></i> Rejeitar</button>
+        </div>
+    </form>
+}

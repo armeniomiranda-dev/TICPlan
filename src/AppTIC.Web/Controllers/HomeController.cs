@@ -21,6 +21,7 @@ public class HomeController(ApplicationDbContext db, OcupacaoTerminal ocupacao) 
         ViewBag.NumCirculacoes = await db.Circulacoes.CountAsync();
         ViewBag.NumHoje = await db.CirculacaoDias.CountAsync(d => d.Data == hoje);
         ViewBag.NumFeeds = await db.GtfsFeeds.CountAsync();
+        ViewBag.NumPedidosPendentes = await db.PedidosAlteracao.CountAsync(p => p.Estado == EstadoPedido.Pendente);
 
         ViewBag.AlvarasAExpirar = await db.Operadores
             .Where(o => o.AlvaraValidade != null && o.AlvaraValidade <= limite)

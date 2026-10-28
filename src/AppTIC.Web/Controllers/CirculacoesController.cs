@@ -3,6 +3,7 @@ using AppTIC.Web.Infrastructure;
 using AppTIC.Web.Models.Domain;
 using AppTIC.Web.Models.ViewModels;
 using AppTIC.Web.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -32,6 +33,7 @@ public class CirculacoesController(ApplicationDbContext db, ICurrentUser current
         return View(rows);
     }
 
+    [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> Create()
     {
         var model = new Circulacao();
@@ -39,6 +41,7 @@ public class CirculacoesController(ApplicationDbContext db, ICurrentUser current
         return View("Form", model);
     }
 
+    [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> Edit(int id)
     {
         var c = await db.Circulacoes.FindAsync(id);
@@ -47,7 +50,7 @@ public class CirculacoesController(ApplicationDbContext db, ICurrentUser current
         return View("Form", c);
     }
 
-    [HttpPost, ValidateAntiForgeryToken]
+    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> Save(Circulacao model)
     {
         ModelState.Remove(nameof(Circulacao.OwnerId));
@@ -101,7 +104,7 @@ public class CirculacoesController(ApplicationDbContext db, ICurrentUser current
         return model.Id == 0 ? RedirectToAction(nameof(Details), new { id = entity.Id }) : RedirectToAction(nameof(Index));
     }
 
-    [HttpPost, ValidateAntiForgeryToken]
+    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> Delete(int id)
     {
         var c = await db.Circulacoes.FindAsync(id);
@@ -131,6 +134,8 @@ public class CirculacoesController(ApplicationDbContext db, ICurrentUser current
         ViewBag.InicioPercurso = c.Percurso.FindIndex(p => tic.Contains(p.Paragem!.Codigo));
         ViewBag.PrimeiroDia = await db.CirculacaoDias.Where(d => d.CirculacaoId == id).MinAsync(d => (DateOnly?)d.Data);
         ViewBag.UltimoDia = await db.CirculacaoDias.Where(d => d.CirculacaoId == id).MaxAsync(d => (DateOnly?)d.Data);
+        ViewBag.Pedidos = await db.PedidosAlteracao.Where(p => p.CirculacaoId == id).OrderByDescending(p => p.CriadoEm)
+            .Include(p => p.PedidoPor).ToListAsync();
         return View(c);
     }
 
@@ -139,7 +144,7 @@ public class CirculacoesController(ApplicationDbContext db, ICurrentUser current
     public record HorarioTicRequest(DateOnly Inicio, DateOnly Fim, TimeOnly? Chegada, TimeOnly? Partida);
 
     /// <summary>Define as horas no TIC para um período (substitui o que estava definido nesses dias).</summary>
-    [HttpPost, ValidateAntiForgeryToken]
+    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> DefinirHorarioTic(int id, [FromBody] HorarioTicRequest req)
     {
         var c = await db.Circulacoes.Include(x => x.HorariosTic).FirstOrDefaultAsync(x => x.Id == id);
@@ -157,7 +162,7 @@ public class CirculacoesController(ApplicationDbContext db, ICurrentUser current
         return Json(new { periodos = c.HorariosTic.Count });
     }
 
-    [HttpPost, ValidateAntiForgeryToken]
+    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> RemoverHorarioTic(int id, int periodoId)
     {
         var c = await db.Circulacoes.Include(x => x.HorariosTic).FirstOrDefaultAsync(x => x.Id == id);
@@ -187,7 +192,7 @@ public class CirculacoesController(ApplicationDbContext db, ICurrentUser current
     public record DiasRequest(DateOnly Inicio, DateOnly Fim, int[]? DiasSemana, bool Realiza);
 
     /// <summary>Marca ou desmarca dias num intervalo (opcionalmente só alguns dias da semana; 0 = domingo).</summary>
-    [HttpPost, ValidateAntiForgeryToken]
+    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> DefinirDias(int id, [FromBody] DiasRequest req)
     {
         var c = await db.Circulacoes.FindAsync(id);
@@ -223,7 +228,7 @@ public class CirculacoesController(ApplicationDbContext db, ICurrentUser current
     // ---- Percurso ----
 
     /// <summary>Guarda o percurso (ids das paragens por ordem); tem de começar na paragem do TIC.</summary>
-    [HttpPost, ValidateAntiForgeryToken]
+    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> GuardarPercurso(int id, [FromBody] int[] percurso)
     {
         var c = await db.Circulacoes.Include(x => x.Percurso).Include(x => x.Operador).FirstOrDefaultAsync(x => x.Id == id);

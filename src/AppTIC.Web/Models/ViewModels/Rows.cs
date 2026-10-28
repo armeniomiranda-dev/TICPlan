@@ -17,10 +17,13 @@ public record GtfsFeedRow(int Id, string Nome, string? Operador, string Ficheiro
 public record RegistoRow(long Id, DateTime Data, string Nivel, string Categoria, string Acao, string Mensagem,
     int? GtfsFeedId, string? UserName, string? Dono);
 
-public record UtilizadorRow(string Id, string Email, string? NomeCompleto, string? Entidade, string Perfil,
+public record UtilizadorRow(string Id, string Email, string? NomeCompleto, string? Entidade, string? Operador, string Perfil,
     bool Ativo, bool Bloqueado, DateTime CriadoEm);
 
 public static class DateOnlyExtensions
 {
     public static DateTime? ToDateTime(this DateOnly? d) => d?.ToDateTime(TimeOnly.MinValue);
 }
+
+public record PedidoRow(int Id, int CirculacaoId, string ViagemId, string Operador, string Descricao, string Estado,
+    string? PedidoPor, DateTime CriadoEm, DateTime? RespondidoEm);

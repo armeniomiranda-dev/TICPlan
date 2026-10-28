@@ -20,6 +20,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     // porque o contexto pode ser criado pelo Identity antes de a autenticação do pedido estar concluída.
     private string? _userId => _currentUser.UserId;
     private bool _isAdmin => _currentUser.IsAdmin;
+    private int? _operadorId => _currentUser.OperadorId;
 
     public DbSet<Operador> Operadores => Set<Operador>();
     public DbSet<Paragem> Paragens => Set<Paragem>();
@@ -29,6 +30,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<CirculacaoHorarioTic> CirculacaoHorariosTic => Set<CirculacaoHorarioTic>();
     public DbSet<GtfsFeed> GtfsFeeds => Set<GtfsFeed>();
     public DbSet<RegistoAtividade> Registos => Set<RegistoAtividade>();
+    public DbSet<PedidoAlteracao> PedidosAlteracao => Set<PedidoAlteracao>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -38,6 +40,9 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         foreach (var entity in b.Model.GetEntityTypes())
             if (entity.GetTableName() is { } table && table.StartsWith("AspNet"))
                 entity.SetTableName(string.Concat(table.Select((c, i) => i > 0 && char.IsUpper(c) ? "_" + char.ToLowerInvariant(c) : char.ToLowerInvariant(c).ToString())));
+
+        b.Entity<ApplicationUser>()
+            .HasOne(x => x.Operador).WithMany().HasForeignKey(x => x.OperadorId).OnDelete(DeleteBehavior.SetNull);
 
         b.Entity<Operador>(e =>
         {
@@ -67,7 +72,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             e.HasKey(x => new { x.CirculacaoId, x.Data });
             e.HasIndex(x => x.Data);
             e.HasOne(x => x.Circulacao).WithMany(c => c.Dias).HasForeignKey(x => x.CirculacaoId).OnDelete(DeleteBehavior.Cascade);
-            e.HasQueryFilter(x => _isAdmin || x.Circulacao!.OwnerId == _userId);
+            e.HasQueryFilter(x => _isAdmin || x.Circulacao!.OperadorId == _operadorId);
         });
 
         b.Entity<PercursoParagem>(e =>
@@ -75,7 +80,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             e.HasKey(x => new { x.CirculacaoId, x.Sequencia });
             e.HasOne(x => x.Circulacao).WithMany(c => c.Percurso).HasForeignKey(x => x.CirculacaoId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.Paragem).WithMany().HasForeignKey(x => x.ParagemId).OnDelete(DeleteBehavior.Restrict);
-            e.HasQueryFilter(x => _isAdmin || x.Circulacao!.OwnerId == _userId);
+            e.HasQueryFilter(x => _isAdmin || x.Circulacao!.OperadorId == _operadorId);
         });
 
         b.Entity<CirculacaoHorarioTic>(e =>
@@ -84,7 +89,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             e.HasIndex(x => new { x.CirculacaoId, x.DataInicio });
             e.Property(x => x.Origem).HasConversion<string>().HasMaxLength(10);
             e.HasOne(x => x.Circulacao).WithMany(c => c.HorariosTic).HasForeignKey(x => x.CirculacaoId).OnDelete(DeleteBehavior.Cascade);
-            e.HasQueryFilter(x => _isAdmin || x.Circulacao!.OwnerId == _userId);
+            e.HasQueryFilter(x => _isAdmin || x.Circulacao!.OperadorId == _operadorId);
         });
 
         b.Entity<GtfsFeed>(e =>
@@ -101,10 +106,30 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             e.HasOne(x => x.GtfsFeed).WithMany(f => f.Registos).HasForeignKey(x => x.GtfsFeedId).OnDelete(DeleteBehavior.SetNull);
         });
 
+        b.Entity<PedidoAlteracao>(e =>
+        {
+            e.ToTable("pedidos_alteracao");
+            e.Property(x => x.Estado).HasConversion<string>().HasMaxLength(20);
+            e.HasIndex(x => new { x.Estado, x.CriadoEm });
+            e.HasOne(x => x.Circulacao).WithMany().HasForeignKey(x => x.CirculacaoId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.PedidoPor).WithMany().HasForeignKey(x => x.PedidoPorId).OnDelete(DeleteBehavior.Restrict);
+            e.HasQueryFilter(x => _isAdmin || x.Circulacao!.OperadorId == _operadorId);
+        });
+
         // Segmentação por login: cada entidade com dono só é visível ao próprio dono, ou a um Admin.
         var apply = typeof(ApplicationDbContext).GetMethod(nameof(ApplyOwnerRules), BindingFlags.NonPublic | BindingFlags.Instance)!;
         foreach (var type in b.Model.GetEntityTypes().Select(t => t.ClrType).Where(t => typeof(IOwnedEntity).IsAssignableFrom(t)).ToList())
             apply.MakeGenericMethod(type).Invoke(this, [b]);
+
+        // Os utilizadores (não Admin) veem a informação do seu operador, seja qual for o login que a criou:
+        // estes filtros substituem o filtro por dono acima. Os registos de atividade continuam por login.
+        b.Entity<Operador>().HasQueryFilter(x => _isAdmin || x.Id == _operadorId);
+        b.Entity<Circulacao>().HasQueryFilter(x => _isAdmin || x.OperadorId == _operadorId);
+        b.Entity<GtfsFeed>().HasQueryFilter(x => _isAdmin || x.OperadorId == _operadorId);
+        // Paragens: as usadas nas circulações do operador (origem, destino ou percurso).
+        b.Entity<Paragem>().HasQueryFilter(x => _isAdmin
+            || Set<Circulacao>().Any(c => c.OrigemId == x.Id || c.DestinoId == x.Id)
+            || Set<PercursoParagem>().Any(p => p.ParagemId == x.Id));
     }
 
     private void ApplyOwnerRules<T>(ModelBuilder b) where T : class, IOwnedEntity

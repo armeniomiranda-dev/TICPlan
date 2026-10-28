@@ -3,6 +3,7 @@ using AppTIC.Web.Data;
 using AppTIC.Web.Models.Domain;
 using AppTIC.Web.Models.ViewModels;
 using AppTIC.Web.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -32,13 +33,14 @@ public class GtfsFeedsController(ApplicationDbContext db, GtfsFeedService gtfs, 
         return View(rows);
     }
 
+    [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> Upload(int? operadorId = null)
     {
         await LoadOperadores();
         return View(new GtfsUploadViewModel { OperadorId = operadorId });
     }
 
-    [HttpPost, ValidateAntiForgeryToken, RequestFormLimits(MultipartBodyLengthLimit = long.MaxValue), DisableRequestSizeLimit]
+    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = Roles.Admin), RequestFormLimits(MultipartBodyLengthLimit = long.MaxValue), DisableRequestSizeLimit]
     public async Task<IActionResult> Upload(GtfsUploadViewModel model, CancellationToken ct)
     {
         if (model.OperadorId is not null && !await db.Operadores.AnyAsync(o => o.Id == model.OperadorId && o.OwnerId == currentUser.UserId, ct))
@@ -115,6 +117,7 @@ public class GtfsFeedsController(ApplicationDbContext db, GtfsFeedService gtfs, 
 
     // ---- Importação de paragens, circulações e calendário ----
 
+    [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> Importar(int id, DateOnly? inicio, DateOnly? fim, CancellationToken ct)
     {
         var feed = await db.GtfsFeeds.Include(f => f.Operador).FirstOrDefaultAsync(f => f.Id == id, ct);
@@ -135,7 +138,7 @@ public class GtfsFeedsController(ApplicationDbContext db, GtfsFeedService gtfs, 
         return View(await importacao.PreverAsync(feed, dados, i, f, ct));
     }
 
-    [HttpPost, ValidateAntiForgeryToken]
+    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> Importar(int id, DateOnly inicio, DateOnly fim, string[] rotas, CancellationToken ct)
     {
         var feed = await db.GtfsFeeds.Include(f => f.Operador).FirstOrDefaultAsync(f => f.Id == id, ct);
@@ -164,7 +167,7 @@ public class GtfsFeedsController(ApplicationDbContext db, GtfsFeedService gtfs, 
 
     private const int MaxDiasImportacao = 730;
 
-    [HttpPost, ValidateAntiForgeryToken]
+    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> Revalidar(int id, CancellationToken ct)
     {
         var feed = await db.GtfsFeeds.FindAsync([id], ct);
@@ -176,7 +179,7 @@ public class GtfsFeedsController(ApplicationDbContext db, GtfsFeedService gtfs, 
         return RedirectToAction(nameof(Details), new { id });
     }
 
-    [HttpPost, ValidateAntiForgeryToken]
+    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {
         var feed = await db.GtfsFeeds.FindAsync([id], ct);

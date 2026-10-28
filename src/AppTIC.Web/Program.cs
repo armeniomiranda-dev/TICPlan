@@ -43,7 +43,8 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
         options.SignIn.RequireConfirmedAccount = false;
     })
     .AddEntityFrameworkStores<ApplicationDbContext>()
-    .AddDefaultTokenProviders();
+    .AddDefaultTokenProviders()
+    .AddClaimsPrincipalFactory<AppClaimsPrincipalFactory>();
 
 builder.Services.Configure<SecurityStampValidatorOptions>(o => o.ValidationInterval = TimeSpan.FromMinutes(5));
 

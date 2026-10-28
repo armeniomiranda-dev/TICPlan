@@ -5,18 +5,28 @@
     var feeds = (List<GtfsFeed>)ViewBag.UltimosFeeds;
     var hoje = DateOnly.FromDateTime(DateTime.Today);
     string Classe(DateOnly d) => d < hoje ? "text-danger fw-semibold" : "text-warning-emphasis";
-}
-<div class="page-header">
-    <h1>Início @(User.IsInRole(Roles.Admin) ? "· todos os logins" : "")</h1>
-</div>
-
-<div class="row g-3 mb-4">
-    @foreach (var (titulo, valor, icone, controller) in new[] {
+    var isAdmin = User.IsInRole(Roles.Admin);
+    var operador = User.FindFirst(AppClaims.OperadorNome)?.Value;
+    var cartoes = new[] {
         ("Operadores", (int)ViewBag.NumOperadores, "building", "Operadores"),
         ("Paragens", (int)ViewBag.NumParagens, "geo-alt", "Paragens"),
         ("Circulações", (int)ViewBag.NumCirculacoes, "bus-front", "Circulacoes"),
+        ("Pedidos pendentes", (int)ViewBag.NumPedidosPendentes, "pencil-square", "Pedidos"),
         ("Circulações hoje", (int)ViewBag.NumHoje, "calendar-day", "Calendario"),
-        ("Feeds GTFS", (int)ViewBag.NumFeeds, "file-earmark-zip", "GtfsFeeds") })
+        ("Feeds GTFS", (int)ViewBag.NumFeeds, "file-earmark-zip", "GtfsFeeds") }
+        .Where(c => isAdmin || c.Item4 != "Operadores");
+}
+<div class="page-header">
+    <h1>Início @(isAdmin ? "· todos os logins" : operador is not null ? $"· {operador}" : "")</h1>
+</div>
+
+@if (!isAdmin && operador is null)
+{
+    <div class="alert alert-warning">A sua conta ainda não está associada a nenhum operador. Contacte a gestão do TIC.</div>
+}
+
+<div class="row g-3 mb-4">
+    @foreach (var (titulo, valor, icone, controller) in cartoes)
     {
         <div class="col-6 col-md-4 col-xl">
             <a class="card stat-card text-decoration-none h-100" asp-controller="@controller" asp-action="Index">
@@ -51,7 +61,7 @@
             <ul class="list-group list-group-flush">
                 @foreach (var a in alvaras)
                 {
-                    <li class="list-group-item d-flex justify-content-between"><a asp-controller="Operadores" asp-action="Edit" asp-route-id="@a.Id">@a.Nome</a><span class="@Classe(a.Data)">@a.Data.ToString("dd/MM/yyyy")</span></li>
+                    <li class="list-group-item d-flex justify-content-between">@if (isAdmin) { <a asp-controller="Operadores" asp-action="Edit" asp-route-id="@a.Id">@a.Nome</a> } else { <span>@a.Nome</span> }<span class="@Classe(a.Data)">@a.Data.ToString("dd/MM/yyyy")</span></li>
                 }
                 @if (alvaras.Count == 0) { <li class="list-group-item text-muted small">Nenhum.</li> }
             </ul>
@@ -71,7 +81,7 @@
     </div>
     <div class="col-lg-4">
         <div class="card h-100">
-            <div class="card-header d-flex justify-content-between">Últimos feeds GTFS <a asp-controller="GtfsFeeds" asp-action="Upload" class="small">Carregar</a></div>
+            <div class="card-header d-flex justify-content-between">Últimos feeds GTFS @if (isAdmin) { <a asp-controller="GtfsFeeds" asp-action="Upload" class="small">Carregar</a> }</div>
             <ul class="list-group list-group-flush">
                 @foreach (var f in feeds)
                 {

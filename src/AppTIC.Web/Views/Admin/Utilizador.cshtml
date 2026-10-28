@@ -2,6 +2,7 @@
 @{
     ViewData["Title"] = Model.Id is null ? "Novo utilizador" : "Editar utilizador";
     var perfis = Roles.Todos.Select(r => new LookupItem(r, r)).ToList();
+    var operadores = (List<LookupItem>)ViewBag.Operadores;
 }
 <div class="page-header"><h1>@ViewData["Title"]</h1></div>
 
@@ -17,6 +18,15 @@
             <div class="col-md-6">
                 <label asp-for="NomeCompleto" class="form-label"></label>
                 <input asp-for="NomeCompleto" class="form-control" />
+            </div>
+            <div class="col-md-6">
+                <label asp-for="OperadorId" class="form-label"></label>
+                <ejs-dropdownlist id="OperadorId" name="OperadorId" dataSource="@operadores" value="@Model.OperadorId?.ToString()"
+                                  placeholder="Escolha o operador…" allowFiltering="true" filterType="Contains" showClearButton="true">
+                    <e-dropdownlist-fields text="Text" value="Value"></e-dropdownlist-fields>
+                </ejs-dropdownlist>
+                <span asp-validation-for="OperadorId" class="text-danger small"></span>
+                <div class="form-text">Obrigatório no perfil Utilizador.</div>
             </div>
             <div class="col-md-6">
                 <label asp-for="Entidade" class="form-label"></label>
@@ -38,7 +48,7 @@
                 <div class="form-text">Mínimo 8 caracteres, com maiúscula, minúscula e algarismo.</div>
             </div>
         </div>
-        <p class="form-text mt-3 mb-0">Perfil <strong>Admin</strong>: vê e edita os dados de todos os logins. Perfil <strong>Utilizador</strong>: vê apenas os seus próprios dados e feeds.</p>
+        <p class="form-text mt-3 mb-0">Perfil <strong>Admin</strong>: vê e edita os dados de todos os logins. Perfil <strong>Utilizador</strong>: vê apenas a informação do seu operador (circulações, paragens, calendário e feeds), sem a poder editar; pede as alterações às circulações através de pedidos de alteração.</p>
     </div>
     <div class="card-footer d-flex gap-2">
         <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> Guardar</button>

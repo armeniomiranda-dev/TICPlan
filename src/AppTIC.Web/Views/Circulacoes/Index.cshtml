@@ -5,10 +5,23 @@
 }
 <div class="page-header">
     <h1>Circulações</h1>
-    <a class="btn btn-primary" asp-action="Create"><i class="bi bi-plus-lg"></i> Nova circulação</a>
+    @if (isAdmin)
+    {
+        <a class="btn btn-primary" asp-action="Create"><i class="bi bi-plus-lg"></i> Nova circulação</a>
+    }
 </div>
 
-<partial name="_GridActions" model="@("Circulacoes")" />
+@if (isAdmin)
+{
+    <partial name="_GridActions" model="@("Circulacoes")" />
+}
+else
+{
+    @* Os utilizadores do operador não editam: pedem a alteração. *@
+    <script id="acoesTemplate" type="text/x-template">
+        <a class="btn btn-sm btn-outline-primary" href="@Url.Action("Criar", "Pedidos")?circulacaoId=${Id}" title="Pedido de alteração"><i class="bi bi-pencil-square"></i></a>
+    </script>
+}
 <script id="viagemTemplate" type="text/x-template">
     <a href="@Url.Action("Details")/${Id}" class="fw-semibold">${ViagemId}</a>
 </script>

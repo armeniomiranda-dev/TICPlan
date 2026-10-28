@@ -1,12 +1,14 @@
 using AppTIC.Web.Data;
 using AppTIC.Web.Models.ViewModels;
 using AppTIC.Web.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace AppTIC.Web.Controllers;
 
-/// <summary>Registo de atividade por login (o Admin vê todos os logins).</summary>
+/// <summary>Registo de atividade (só Admin; vê todos os logins).</summary>
+[Authorize(Roles = Roles.Admin)]
 public class RegistosController(ApplicationDbContext db, ICurrentUser currentUser) : Controller
 {
     public async Task<IActionResult> Index(string? categoria = null, int dias = 30)

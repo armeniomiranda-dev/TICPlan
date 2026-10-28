@@ -2,6 +2,7 @@ using AppTIC.Web.Data;
 using AppTIC.Web.Models.Domain;
 using AppTIC.Web.Models.ViewModels;
 using AppTIC.Web.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -19,15 +20,17 @@ public class ParagensController(ApplicationDbContext db, ICurrentUser currentUse
         return View(rows);
     }
 
+    [Authorize(Roles = Roles.Admin)]
     public IActionResult Create() => View("Form", new Paragem());
 
+    [Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> Edit(int id)
     {
         var paragem = await db.Paragens.FindAsync(id);
         return paragem is null ? NotFound() : View("Form", paragem);
     }
 
-    [HttpPost, ValidateAntiForgeryToken]
+    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> Save(Paragem model)
     {
         ModelState.Remove(nameof(Paragem.OwnerId));
@@ -53,7 +56,7 @@ public class ParagensController(ApplicationDbContext db, ICurrentUser currentUse
         return RedirectToAction(nameof(Index));
     }
 
-    [HttpPost, ValidateAntiForgeryToken]
+    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = Roles.Admin)]
     public async Task<IActionResult> Delete(int id)
     {
         var paragem = await db.Paragens.FindAsync(id);

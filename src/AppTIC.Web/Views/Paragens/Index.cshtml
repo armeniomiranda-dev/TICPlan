@@ -5,10 +5,16 @@
 }
 <div class="page-header">
     <h1>Paragens</h1>
-    <a class="btn btn-primary" asp-action="Create"><i class="bi bi-plus-lg"></i> Nova paragem</a>
+    @if (isAdmin)
+    {
+        <a class="btn btn-primary" asp-action="Create"><i class="bi bi-plus-lg"></i> Nova paragem</a>
+    }
 </div>
 
-<partial name="_GridActions" model="@("Paragens")" />
+@if (isAdmin)
+{
+    <partial name="_GridActions" model="@("Paragens")" />
+}
 
 <ejs-grid id="grid" dataSource="@Model" allowPaging="true" allowSorting="true" allowFiltering="true" allowExcelExport="true"
           toolbar="@(new List<string> { "Search", "ExcelExport" })" toolbarClick="appTic.gridToolbarClick">
@@ -21,6 +27,6 @@
         <e-grid-column field="Longitude" headerText="Longitude" format="N6" textAlign="Right" width="120"></e-grid-column>
         <e-grid-column field="Comentarios" headerText="Comentários" width="220"></e-grid-column>
         <e-grid-column field="Dono" headerText="Utilizador" visible="@isAdmin" width="180"></e-grid-column>
-        <e-grid-column headerText="" template="#acoesTemplate" width="100" allowFiltering="false" allowSorting="false"></e-grid-column>
+        <e-grid-column headerText="" template="#acoesTemplate" visible="@isAdmin" width="100" allowFiltering="false" allowSorting="false"></e-grid-column>
     </e-grid-columns>
 </ejs-grid>

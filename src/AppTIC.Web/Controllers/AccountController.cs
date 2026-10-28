@@ -31,7 +31,8 @@ public class AccountController(
         if (result.Succeeded)
         {
             await log.LogAsync(CategoriaRegisto.Sessao, "Login", "Sessão iniciada.", ownerId: user.Id, userName: user.UserName);
-            return LocalRedirect(Url.IsLocalUrl(model.ReturnUrl) ? model.ReturnUrl! : "/");
+            // "~/" = raiz da aplicação (no IIS, /TICPlanner/), não a raiz do site.
+            return LocalRedirect(Url.IsLocalUrl(model.ReturnUrl) ? model.ReturnUrl! : Url.Content("~/"));
         }
 
         await log.LogAsync(CategoriaRegisto.Sessao, "Login falhado",

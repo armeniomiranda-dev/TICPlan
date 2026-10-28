@@ -15,7 +15,10 @@
                 <i class="bi bi-map"></i> Mapa geral
             </button>
         }
-        <a class="btn btn-primary" asp-action="Upload"><i class="bi bi-upload"></i> Carregar feed</a>
+        @if (isAdmin)
+        {
+            <a class="btn btn-primary" asp-action="Upload"><i class="bi bi-upload"></i> Carregar feed</a>
+        }
     </div>
 </div>
 
@@ -47,8 +50,11 @@
 </script>
 <script id="feedAcoesTemplate" type="text/x-template">
     <a class="btn btn-sm btn-outline-primary" href="@Url.Action("Download")/${Id}" title="Descarregar"><i class="bi bi-download"></i></a>
-    <button type="button" class="btn btn-sm btn-outline-danger" title="Eliminar"
+    @if (isAdmin)
+    {
+        <button type="button" class="btn btn-sm btn-outline-danger" title="Eliminar"
             onclick="appTic.postConfirm('@Url.Action("Delete")/${Id}', 'Eliminar este feed GTFS? O ficheiro será apagado.')"><i class="bi bi-trash"></i></button>
+    }
 </script>
 
 <ejs-grid id="grid" dataSource="@Model" allowPaging="true" allowSorting="true" allowFiltering="true" allowExcelExport="true"

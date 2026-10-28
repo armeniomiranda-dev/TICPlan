@@ -22,11 +22,17 @@ Aplicação ASP.NET Core MVC (.NET 10) para registar o planeamento de circulaç�
 Além disso: `GtfsFeed` (ficheiro .zip, SHA-256, estado de validação, contagens, datas do feed_info) e `RegistoAtividade`
 (log de sessões, GTFS, alterações de dados e administração).
 
-## Segmentação por login
+## Perfis e segmentação por operador
 
-Todas as entidades com dono (`IOwnedEntity`) têm um filtro global no `ApplicationDbContext`: um utilizador só vê e altera
-os seus registos; o perfil `Admin` vê todos (com a coluna "Utilizador" nas grelhas). O `SaveChanges` impede criar,
-alterar ou transferir registos de outro login. Não há registo público: o Admin cria os utilizadores em **Utilizadores**.
+- **Admin**: vê e edita tudo (operadores, paragens, circulações, feeds GTFS, registos e utilizadores).
+- **Utilizador**: está associado a um **operador** (obrigatório, definido pelo Admin em **Utilizadores**) e só vê a
+  informação desse operador: circulações (e calendário, percurso, horas no TIC), paragens usadas nessas circulações e
+  feeds GTFS do operador. Não vê os menus Operadores e Registos e não edita: nas circulações faz **pedidos de alteração**
+  (menu **Pedidos**), que o Admin aceita ou rejeita (a alteração em si é feita pelo Admin na circulação).
+
+Os filtros globais estão no `ApplicationDbContext`; o operador do utilizador vai numa claim da sessão
+(`AppClaimsPrincipalFactory`). Mudar o operador ou o perfil de um utilizador termina as sessões abertas dele.
+O `SaveChanges` continua a impedir alterar registos de outro login a quem não é Admin. Não há registo público.
 
 ## Arrancar em desenvolvimento
 
@@ -71,7 +77,8 @@ no mesmo servidor (`ConnectionStrings:DefaultConnection` em `appsettings.json`);
 3. No Gestor do IIS, criar o application pool **AppTIC** com *.NET CLR version* = **No Managed Code**.
 4. Criar o site **AppTIC** com caminho físico `C:\AppTIC\site`, o pool AppTIC e o binding
    `http` · `10.0.30.97` · porta livre (p.ex. 8080). Também funciona como aplicação dentro de um site existente
-   (p.ex. `http://10.0.30.97/AppTIC`).
+   (em produção: `http://10.0.30.97/TICPlanner`, no Default Web Site). Os links e redirecionamentos usam sempre a raiz
+   da aplicação (`~/`, `Url.Action`), nunca `/`, para funcionar dentro desse caminho.
 5. Dar permissão de **Modificar** em `C:\AppTIC\dados` à conta `IIS AppPool\AppTIC`:
    `icacls C:\AppTIC\dados /grant "IIS AppPool\AppTIC:(OI)(CI)M"`
 6. Abrir a porta na firewall do Windows, se for acedida a partir de outras máquinas.
