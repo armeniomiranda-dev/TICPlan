@@ -1,7 +1,7 @@
 'use strict';
 
 const SimulacaoPlaneador = (() => {
-    const zonas = { Lisboa: [1, 2, 3, 4], Fora: [5, 6, 7, 8], Norte: [9, 10], Outros: [11, 12, 13, 14, 15, 16, 17] };
+    const zonas = { Lisboa: [1, 2, 3, 4], Fora: [5, 6, 7, 8], Norte: [9, 10], Comum: [11, 12, 13, 14, 15, 16, 17] };
     const caisComuns = [9, 10];
 
     function alocar(viagens) {

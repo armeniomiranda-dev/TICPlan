@@ -1,6 +1,7 @@
 using AppTIC.Web.Data;
 using AppTIC.Web.Infrastructure;
 using AppTIC.Web.Models.Domain;
+using AppTIC.Web.Models.Terminal;
 using AppTIC.Web.Models.ViewModels;
 using AppTIC.Web.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -79,6 +80,7 @@ public class CirculacoesController(ApplicationDbContext db, ICurrentUser current
         entity.LinhaId = model.LinhaId;
         entity.DesignacaoLinha = model.DesignacaoLinha;
         entity.Ambito = model.Ambito;
+        entity.Categoria = model.Categoria;
         entity.Autorizacao = model.Autorizacao;
         entity.AutorizacaoValidade = model.AutorizacaoValidade;
         entity.DeclaracaoCapacidade = model.DeclaracaoCapacidade;
@@ -259,6 +261,7 @@ public class CirculacoesController(ApplicationDbContext db, ICurrentUser current
             .Select(o => new LookupItem(o.Id.ToString(), o.Nif + " – " + (o.Abreviatura ?? o.Designacao))).ToListAsync();
         ViewBag.Paragens = await ParagensLookup(ownerId);
         ViewBag.Ambitos = EnumExtensions.ToLookup<Ambito>();
+        ViewBag.Categorias = EnumExtensions.ToLookup<ZonaCais>();
         ViewBag.TemHistoricoTic = circulacaoId != 0 && await db.CirculacaoHorariosTic.AnyAsync(h => h.CirculacaoId == circulacaoId);
     }
 

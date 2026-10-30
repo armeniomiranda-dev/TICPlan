@@ -12,7 +12,7 @@ public class TerminalStateStoreTests
     [InlineData(ZonaCais.Lisboa, 1, 4)]
     [InlineData(ZonaCais.Fora, 5, 8)]
     [InlineData(ZonaCais.Norte, 9, 10)]
-    [InlineData(ZonaCais.Outros, 11, 17)]
+    [InlineData(ZonaCais.Comum, 11, 17)]
     public void ChegadaAtribuiCaisDaZona(ZonaCais zona, int primeiro, int ultimo)
     {
         var store = CriarStore();
@@ -73,6 +73,50 @@ public class TerminalStateStoreTests
 
         Assert.NotNull(alocacoes);
         Assert.All(alocacoes, a => Assert.Equal(9, a.Cais));
+    }
+
+    [Fact]
+    public void PlanearDiaDevolveExcessoEmVezDeFalhar()
+    {
+        var solver = new CaisService();
+        var plano = solver.PlanearDia([
+            new("N1", ZonaCais.Norte, 10, 20, null),
+            new("N2", ZonaCais.Norte, 10, 20, null),
+            new("N3", ZonaCais.Norte, 15, 25, null),
+            new("N4", ZonaCais.Norte, 20, 30, null)
+        ]);
+
+        Assert.NotNull(plano);
+        Assert.Equal(["N3"], plano.SemCais);
+        Assert.Equal(3, plano.Alocacoes.Count);
+        Assert.All(plano.Alocacoes, a => Assert.InRange(a.Cais, 9, 10));
+    }
+
+    [Fact]
+    public void PlanearDiaPrefereCaisDaZonaAntesDaReserva()
+    {
+        var solver = new CaisService();
+        var plano = solver.PlanearDia(
+            Enumerable.Range(0, 5).Select(i => new AutocarroDto($"L{i}", ZonaCais.Lisboa, 10, 20, null)).ToList());
+
+        Assert.NotNull(plano);
+        Assert.Empty(plano.SemCais);
+        Assert.Equal(4, plano.Alocacoes.Count(a => a.Cais is >= 1 and <= 4));
+        Assert.Single(plano.Alocacoes, a => a.Cais is 9 or 10);
+    }
+
+    [Fact]
+    public void PlanearDiaMantemCaisFixoDeCarroAtracado()
+    {
+        var solver = new CaisService();
+        var plano = solver.PlanearDia([
+            new("A", ZonaCais.Comum, 10, 30, 15),
+            new("Extra", ZonaCais.Comum, 20, 40, null)
+        ]);
+
+        Assert.NotNull(plano);
+        Assert.Equal(15, plano.Alocacoes.Single(a => a.AutocarroId == "A").Cais);
+        Assert.NotEqual(15, plano.Alocacoes.Single(a => a.AutocarroId == "Extra").Cais);
     }
 
     [Fact]

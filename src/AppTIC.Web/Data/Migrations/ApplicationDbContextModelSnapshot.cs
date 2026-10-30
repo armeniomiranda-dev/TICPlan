@@ -152,6 +152,11 @@ namespace AppTIC.Web.Data.Migrations
                         .HasColumnType("date")
                         .HasColumnName("autorizacao_validade");
 
+                    b.Property<string>("Categoria")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("categoria");
+
                     b.Property<TimeOnly?>("Chegada")
                         .HasColumnType("time without time zone")
                         .HasColumnName("chegada");

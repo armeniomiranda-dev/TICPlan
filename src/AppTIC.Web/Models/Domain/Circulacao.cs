@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using AppTIC.Web.Models.Terminal;
 
 namespace AppTIC.Web.Models.Domain;
 
@@ -17,6 +18,10 @@ public class Circulacao : OwnedEntity
 
     [Display(Name = "Âmbito")]
     public Ambito? Ambito { get; set; }
+
+    /// <summary>Categoria usada na atribuição de cais (Lisboa/Fora/Norte/Comum).</summary>
+    [Display(Name = "Categoria (atribuição de cais)")]
+    public ZonaCais? Categoria { get; set; }
 
     [StringLength(100), Display(Name = "Nº autorização do serviço")]
     public string? Autorizacao { get; set; }

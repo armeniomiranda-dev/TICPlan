@@ -6,6 +6,12 @@ namespace AppTIC.Web.Services;
 public interface ICaisService
 {
     IReadOnlyList<AlocacaoResposta>? AlocarCais(IReadOnlyList<AutocarroDto> autocarros);
+
+    /// <summary>
+    /// Planeamento de um dia inteiro: maximiza os autocarros com cais (preferindo os cais da própria zona)
+    /// e devolve os que não cabem, em vez de falhar. Null só quando os cais fixos são incompatíveis.
+    /// </summary>
+    PlaneamentoDia? PlanearDia(IReadOnlyList<AutocarroDto> autocarros);
 }
 
 public class CaisService : ICaisService
@@ -14,9 +20,53 @@ public class CaisService : ICaisService
 
     public IReadOnlyList<AlocacaoResposta>? AlocarCais(IReadOnlyList<AutocarroDto> autocarros)
     {
+        var (model, escolhas) = Construir(autocarros, obrigatorio: true);
+
+        var solver = new CpSolver();
+        var status = solver.Solve(model);
+        if (status == CpSolverStatus.Infeasible)
+            return null;
+        if (status is not (CpSolverStatus.Optimal or CpSolverStatus.Feasible))
+            throw new InvalidOperationException($"O resolvedor não conseguiu concluir a alocação: {status}.");
+
+        return escolhas.Where(e => solver.BooleanValue(e.Escolhido))
+            .Select(e => new AlocacaoResposta(e.Autocarro.AutocarroId, e.Cais))
+            .ToList();
+    }
+
+    public PlaneamentoDia? PlanearDia(IReadOnlyList<AutocarroDto> autocarros)
+    {
+        var (model, escolhas) = Construir(autocarros, obrigatorio: false);
+
+        // Cada autocarro com cais vale mais do que todas as passagens para a reserva juntas.
+        long pesoAtribuido = autocarros.Count + 1;
+        model.Maximize(LinearExpr.WeightedSum(
+            escolhas.Select(e => (ILiteral)e.Escolhido),
+            escolhas.Select(e => e.Reserva ? pesoAtribuido - 1 : pesoAtribuido)));
+
+        var solver = new CpSolver { StringParameters = "max_time_in_seconds:10 num_workers:8" };
+        var status = solver.Solve(model);
+        if (status == CpSolverStatus.Infeasible)
+            return null;
+        if (status is not (CpSolverStatus.Optimal or CpSolverStatus.Feasible))
+            throw new InvalidOperationException($"O resolvedor não conseguiu concluir o planeamento: {status}.");
+
+        var alocacoes = escolhas.Where(e => solver.BooleanValue(e.Escolhido))
+            .Select(e => new AlocacaoResposta(e.Autocarro.AutocarroId, e.Cais))
+            .ToList();
+        var comCais = alocacoes.Select(a => a.AutocarroId).ToHashSet(StringComparer.Ordinal);
+        return new PlaneamentoDia(
+            alocacoes,
+            autocarros.Where(a => !comCais.Contains(a.AutocarroId)).Select(a => a.AutocarroId).ToList(),
+            status == CpSolverStatus.Optimal);
+    }
+
+    private static (CpModel Model, List<(AutocarroDto Autocarro, int Cais, bool Reserva, BoolVar Escolhido)> Escolhas)
+        Construir(IReadOnlyList<AutocarroDto> autocarros, bool obrigatorio)
+    {
         var model = new CpModel();
         var intervalos = Enumerable.Range(1, 17).ToDictionary(c => c, _ => new List<IntervalVar>());
-        var escolhas = new List<(AutocarroDto Autocarro, int Cais, BoolVar Escolhido)>();
+        var escolhas = new List<(AutocarroDto Autocarro, int Cais, bool Reserva, BoolVar Escolhido)>();
 
         foreach (var autocarro in autocarros)
         {
@@ -25,7 +75,7 @@ public class CaisService : ICaisService
                 ZonaCais.Lisboa => Enumerable.Range(1, 4),
                 ZonaCais.Fora => Enumerable.Range(5, 4),
                 ZonaCais.Norte => Enumerable.Range(9, 2),
-                ZonaCais.Outros => Enumerable.Range(11, 7),
+                ZonaCais.Comum => Enumerable.Range(11, 7),
                 _ => throw new ArgumentOutOfRangeException(nameof(autocarros), "Zona de cais inválida.")
             };
 
@@ -44,26 +94,21 @@ public class CaisService : ICaisService
                     $"intervalo_{escolhas.Count}");
                 opcoes.Add(escolhido);
                 intervalos[cais].Add(intervalo);
-                escolhas.Add((autocarro, cais, escolhido));
+                escolhas.Add((autocarro, cais, !caisPrimarios.Contains(cais), escolhido));
                 if (autocarro.CaisFixo is { } fixo && cais != fixo)
                     model.Add(escolhido == 0);
             }
-            model.AddExactlyOne(opcoes);
+            // Um autocarro com cais fixo (já atracado) tem sempre de ficar com ele.
+            if (obrigatorio || autocarro.CaisFixo is not null)
+                model.AddExactlyOne(opcoes);
+            else
+                model.AddAtMostOne(opcoes);
         }
 
         foreach (var intervalosCais in intervalos.Values)
             if (intervalosCais.Count > 1)
                 model.AddNoOverlap(intervalosCais);
 
-        var solver = new CpSolver();
-        var status = solver.Solve(model);
-        if (status == CpSolverStatus.Infeasible)
-            return null;
-        if (status is not (CpSolverStatus.Optimal or CpSolverStatus.Feasible))
-            throw new InvalidOperationException($"O resolvedor não conseguiu concluir a alocação: {status}.");
-
-        return escolhas.Where(e => solver.BooleanValue(e.Escolhido))
-            .Select(e => new AlocacaoResposta(e.Autocarro.AutocarroId, e.Cais))
-            .ToList();
+        return (model, escolhas);
     }
 }

@@ -74,8 +74,12 @@ builder.Services.AddScoped<SimulacaoService>();
 builder.Services.AddSingleton<ICaisService, CaisService>();
 builder.Services.AddSingleton<ITerminalStateStore, InMemoryTerminalStateStore>();
 builder.Services.AddAntiforgery(options => options.HeaderName = "RequestVerificationToken");
+// PascalCase como nos controladores MVC: o simulacao.js lê Token, Mensagem, Alocacoes, etc.
 builder.Services.ConfigureHttpJsonOptions(options =>
-    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(allowIntegerValues: false)));
+{
+    options.SerializerOptions.PropertyNamingPolicy = null;
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(allowIntegerValues: false));
+});
 
 // Todas as páginas exigem sessão iniciada, exceto as marcadas com [AllowAnonymous].
 builder.Services.AddControllersWithViews(o =>
@@ -151,7 +155,19 @@ terminalApi.MapPost("/alocar-preview", (IReadOnlyList<AutocarroDto> pedidos, ICa
         : Results.Ok(resultado.OrderBy(a => a.Cais));
 });
 
-terminalApi.MapPost("/chegada", (NovaChegadaRequest pedido, ITerminalStateStore store) =>
+terminalApi.MapPost("/planear-dia", (IReadOnlyList<AutocarroDto> pedidos, ICaisService solver) =>
+{
+    if (pedidos.Any(p => string.IsNullOrWhiteSpace(p.AutocarroId) || !Enum.IsDefined(p.Zona) || p.ChegadaMinutos >= p.PartidaMinutos) ||
+        pedidos.Select(p => p.AutocarroId).Distinct(StringComparer.Ordinal).Count() != pedidos.Count)
+        return Results.BadRequest(new { Mensagem = "Existem pedidos inválidos ou repetidos no planeamento do dia." });
+
+    var resultado = solver.PlanearDia(pedidos);
+    return resultado is null
+        ? Results.Conflict(new { Mensagem = "Os cais fixos (autocarros já atracados) sobrepõem-se; não é possível planear." })
+        : Results.Ok(resultado);
+});
+
+terminalApi.MapPost("/chegada",(NovaChegadaRequest pedido, ITerminalStateStore store) =>
 {
     if (string.IsNullOrWhiteSpace(pedido.Id) || !Enum.IsDefined(pedido.Zona) ||
         pedido.ChegadaMinutos < 0 || pedido.ChegadaMinutos >= pedido.PartidaMinutos)

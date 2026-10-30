@@ -4,6 +4,7 @@
     var operadores = (List<LookupItem>)ViewBag.Operadores;
     var paragens = (List<LookupItem>)ViewBag.Paragens;
     var ambitos = (List<LookupItem>)ViewBag.Ambitos;
+    var categorias = (List<LookupItem>)ViewBag.Categorias;
     var temHistorico = (bool)ViewBag.TemHistoricoTic;
     DateTime? Hora(TimeOnly? t) => t is null ? null : DateTime.Today.Add(t.Value.ToTimeSpan());
 }
@@ -40,6 +41,12 @@
             <div class="col-md-3">
                 <label asp-for="Ambito" class="form-label"></label>
                 <ejs-dropdownlist id="Ambito" name="Ambito" dataSource="@ambitos" value="@Model.Ambito?.ToString()" placeholder="Escolha…" showClearButton="true">
+                    <e-dropdownlist-fields text="Text" value="Value"></e-dropdownlist-fields>
+                </ejs-dropdownlist>
+            </div>
+            <div class="col-md-3">
+                <label asp-for="Categoria" class="form-label"></label>
+                <ejs-dropdownlist id="Categoria" name="Categoria" dataSource="@categorias" value="@Model.Categoria?.ToString()" placeholder="Escolha…" showClearButton="true">
                     <e-dropdownlist-fields text="Text" value="Value"></e-dropdownlist-fields>
                 </ejs-dropdownlist>
             </div>

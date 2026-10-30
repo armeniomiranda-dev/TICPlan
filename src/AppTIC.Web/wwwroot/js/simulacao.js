@@ -5,7 +5,7 @@
     const el = id => document.getElementById(id);
     const zonas = SimulacaoPlaneador.zonas;
     const caisComuns = SimulacaoPlaneador.caisComuns;
-    const cores = { Lisboa: '#3b82f6', Fora: '#f59e0b', Norte: '#a855f7', Outros: '#10b981' };
+    const cores = { Lisboa: '#3b82f6', Fora: '#f59e0b', Norte: '#a855f7', Comum: '#10b981' };
     const canvas = el('sim-canvas');
     const ctx = canvas.getContext('2d');
 
@@ -17,14 +17,24 @@
     let carregamento = null;
     let caisSelecionado = null;
     let tokenTerminal = null;
-    let estadoTerminal = [];
     let versaoPlaneamento = 0;
+    let temporizadorPlaneamento = null;
+    let assinaturaPainel = '';
 
     function hora(segundos) {
         const dia = Math.floor(segundos / 86400);
         const valor = ((Math.floor(segundos) % 86400) + 86400) % 86400;
         const texto = [Math.floor(valor / 3600), Math.floor(valor % 3600 / 60), valor % 60].map(n => String(n).padStart(2, '0')).join(':');
         return texto + (dia < 0 ? ' (dia anterior)' : dia > 0 ? ' (dia seguinte)' : '');
+    }
+
+    /** "HH:mm[:ss]" → segundos do dia, ou null se inválido. */
+    function lerHora(valor) {
+        const partes = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(valor ?? '');
+        if (!partes) return null;
+        const [h, m, s] = [Number(partes[1]), Number(partes[2]), Number(partes[3] ?? 0)];
+        if (h > 23 || m > 59 || s > 59) return null;
+        return h * 3600 + m * 60 + s;
     }
 
     function texto(tag, valor, classe) {
@@ -39,8 +49,7 @@
         if (!eventos) return;
         const linha = document.createElement('div');
         linha.className = `sim-event-entry${erro ? ' error' : ''}`;
-        const agora = new Date();
-        linha.textContent = `[${agora.toTimeString().slice(0, 8)}] ${mensagem}`;
+        linha.textContent = `[${hora(tempo)}] ${mensagem}`;
         eventos.prepend(linha);
         while (eventos.children.length > 80) eventos.removeChild(eventos.lastChild);
     }
@@ -58,7 +67,25 @@
         if (alerta) alerta.hidden = true;
     }
 
+    function caisPermitidos(zona) {
+        return zona === 'Norte' ? zonas.Norte : [...zonas[zona], ...caisComuns];
+    }
+
+    /** Cais que não pode mudar ao replanear: atracado manualmente ou já ocupado à hora simulada. */
+    function caisFixo(v) {
+        const atual = alocacoes.get(v.Id);
+        const fixo = v.caisAtracado ?? (tempo > 0 && v.InicioSegundos <= tempo && tempo < v.FimSegundos ? atual : null);
+        return fixo != null && caisPermitidos(v.zona).includes(fixo) ? fixo : null;
+    }
+
+    function agendarPlaneamento() {
+        clearTimeout(temporizadorPlaneamento);
+        temporizadorPlaneamento = setTimeout(() => planear(), 300);
+    }
+
+    /** Planeamento do dia com OR-Tools: devolve a promessa do plano (ou null se falhou). */
     async function planear() {
+        clearTimeout(temporizadorPlaneamento);
         const versao = ++versaoPlaneamento;
         const candidatas = viagens
             .filter(v => Object.hasOwn(zonas, v.zona) && v.FimSegundos > v.InicioSegundos)
@@ -67,41 +94,58 @@
                 Zona: v.zona,
                 ChegadaMinutos: Math.floor(v.InicioSegundos / 60),
                 PartidaMinutos: Math.max(Math.floor(v.InicioSegundos / 60) + 1, Math.ceil(v.FimSegundos / 60)),
-                CaisFixo: null
+                CaisFixo: caisFixo(v)
             }));
 
         if (candidatas.length === 0) {
             alocacoes = new Map();
+            el('sim-plan').disabled = !viagens.length;
+            esconderAlertaLotacao();
+            el('sim-status').textContent = `${viagens.length} circulações · nenhuma com zona para planear.`;
             atualizar();
-            return;
+            return null;
         }
 
+        el('sim-plan').disabled = true;
+        el('sim-status').textContent = `A otimizar o plano do dia com OR-Tools (${candidatas.length} autocarros)...`;
         try {
-            const resultado = await pedidoTerminal('alocar-preview', 'POST', candidatas);
-            if (versao !== versaoPlaneamento) return;
+            const plano = await pedidoTerminal('planear-dia', 'POST', candidatas);
+            if (versao !== versaoPlaneamento) return null;
 
-            const mapa = new Map();
-            for (const item of candidatas)
-                mapa.set(item.AutocarroId, null);
-            for (const alocacao of resultado ?? [])
+            const mapa = new Map(candidatas.map(c => [c.AutocarroId, null]));
+            for (const alocacao of plano.Alocacoes ?? [])
                 mapa.set(alocacao.AutocarroId, alocacao.Cais);
-
             alocacoes = mapa;
-            esconderAlertaLotacao();
+
+            const semCais = viagens.filter(v => (plano.SemCais ?? []).includes(v.Id));
+            el('sim-status').textContent =
+                `Plano OR-Tools: ${candidatas.length - semCais.length} com cais, ${semCais.length} sem cais` +
+                (plano.Otimo ? ' (ótimo).' : ' (melhor solução encontrada no limite de tempo).');
+            if (semCais.length)
+                mostrarAlertaLotacao(`${semCais.length} sem cais no plano: ${semCais.map(v => `${v.ViagemId} (${hora(v.InicioSegundos)})`).join(', ')}`);
+            else
+                esconderAlertaLotacao();
+            adicionarEvento(`[OR-Tools] Plano do dia: ${candidatas.length - semCais.length}/${candidatas.length} com cais.`);
             atualizar();
+            return plano;
         } catch (erro) {
-            if (versao !== versaoPlaneamento) return;
+            if (versao !== versaoPlaneamento) return null;
             alocacoes = SimulacaoPlaneador.alocar(viagens);
-            mostrarAlertaLotacao(`Preview OR-Tools indisponível: ${erro.message}`);
-            adicionarEvento(`[OR-Tools] Falha no preview: ${erro.message}`, true);
+            el('sim-status').textContent = 'Plano provisório pela regra do primeiro cais livre (OR-Tools indisponível).';
+            mostrarAlertaLotacao(`OR-Tools indisponível: ${erro.message}`);
+            adicionarEvento(`[OR-Tools] Falha no planeamento: ${erro.message}`, true);
             atualizar();
+            return null;
+        } finally {
+            if (versao === versaoPlaneamento) el('sim-plan').disabled = false;
         }
     }
 
     function criarLista() {
         const lista = el('sim-list');
         lista.replaceChildren();
-        el('sim-count').textContent = `${viagens.length} circulações`;
+        const extras = viagens.filter(v => v.ForaDoPlano).length;
+        el('sim-count').textContent = `${viagens.length - extras} circulações${extras ? ` + ${extras} fora do plano` : ''}`;
         if (!viagens.length) {
             lista.append(texto('p', 'Não existem circulações com horário para esta data.', 'sim-empty'));
             return;
@@ -109,22 +153,24 @@
 
         for (const v of viagens) {
             const artigo = document.createElement('article');
-            artigo.className = 'sim-trip';
+            artigo.className = `sim-trip${v.ForaDoPlano ? ' fora-plano' : ''}`;
             const titulo = document.createElement('div');
             titulo.className = 'sim-trip-heading';
             titulo.append(texto('strong', v.ViagemId), texto('span', v.Operador));
             artigo.append(titulo);
-            artigo.append(texto('small', `${v.Linha || 'Linha não indicada'} · ${v.Origem || 'Origem não indicada'} → ${v.Destino || 'Destino não indicado'}`));
+            if (!v.ForaDoPlano)
+                artigo.append(texto('small', `${v.Linha || 'Linha não indicada'} · ${v.Origem || 'Origem não indicada'} → ${v.Destino || 'Destino não indicado'}`));
 
             let horario = `${hora(v.InicioSegundos)} – ${hora(v.FimSegundos)}`;
             if (v.PermanenciaEstimada) horario += ' · permanência estimada';
             if (v.FimSegundos <= v.InicioSegundos) horario += ' · sem duração para simular';
             artigo.append(texto('small', horario));
+            artigo.append(texto('small', v.ForaDoPlano ? 'Carro fora do plano (despacho)' : `Categoria: ${v.Categoria || 'não indicada'}`));
 
             const label = texto('label', 'Zona simulada');
             const select = document.createElement('select');
             select.setAttribute('aria-label', `Zona simulada para ${v.ViagemId}`);
-            for (const nome of ['', 'Lisboa', 'Fora', 'Norte', 'Outros']) {
+            for (const nome of ['', ...Object.keys(zonas)]) {
                 const option = document.createElement('option');
                 option.value = nome;
                 option.textContent = nome || 'Não atribuída';
@@ -132,7 +178,7 @@
             }
             select.value = v.zona;
             select.disabled = v.FimSegundos <= v.InicioSegundos;
-            select.addEventListener('change', () => { v.zona = select.value; planear(); });
+            select.addEventListener('change', () => { v.zona = select.value; v.caisAtracado = null; agendarPlaneamento(); });
             label.append(select);
             artigo.append(label);
             lista.append(artigo);
@@ -241,7 +287,7 @@
                 } else {
                     posicao = cais;
                 }
-                desenharAutocarro(posicao.x, posicao.y, posicao.angulo, cores[v.zona]);
+                desenharAutocarro(posicao.x, posicao.y, posicao.angulo, v.ForaDoPlano ? '#f43f5e' : cores[v.zona]);
             }
 
             ctx.textAlign = 'center';
@@ -268,46 +314,44 @@
             const numero = ocupados.filter(v => zonas[zona].includes(alocacoes.get(v.Id))).length;
             resumo.append(texto('span', `${zona}: ${numero} / ${zonas[zona].length}`));
         }
-        const comunsOcupados = ocupados.filter(v => caisComuns.includes(alocacoes.get(v.Id))).length;
-        resumo.append(texto('span', `Comuns: ${comunsOcupados} / ${caisComuns.length}`));
+        const emReserva = ocupados.filter(v => v.zona !== 'Norte' && caisComuns.includes(alocacoes.get(v.Id))).length;
+        resumo.append(texto('span', `Reserva 9–10 (Lisboa/Fora): ${emReserva}`));
 
         el('sim-conflicts').textContent = semCais.length
             ? `Sem cais na simulação (${semCais.length}): ${semCais.map(v => v.ViagemId).join(', ')}`
             : '';
 
         pintarMapa(ocupados);
+        renderPainelCais(ocupados);
 
         if (caisSelecionado !== null) {
             const v = ocupados.find(a => alocacoes.get(a.Id) === caisSelecionado);
-            const livreComum = caisComuns.includes(caisSelecionado) ? ' (reserva comum)' : '';
+            const reserva = caisComuns.includes(caisSelecionado) ? ' (reserva de Lisboa/Fora)' : '';
             el('sim-inspector').textContent = v
-                ? `Cais ${caisSelecionado}: ${v.ViagemId} · ${v.Operador} · ${hora(v.InicioSegundos)} – ${hora(v.FimSegundos)}`
-                : `Cais ${caisSelecionado}: livre na simulação${livreComum}.`;
+                ? `Cais ${caisSelecionado}: ${v.ViagemId} · ${v.Operador} · ${v.zona} · ${hora(v.InicioSegundos)} – ${hora(v.FimSegundos)}${v.caisAtracado ? ' · atracado' : ''}`
+                : `Cais ${caisSelecionado}: livre na simulação${reserva}.`;
         }
     }
 
-    function renderPainelCais() {
+    /** Painel de cais à hora simulada; só redesenha quando a ocupação muda. */
+    function renderPainelCais(ocupados) {
         const painel = el('sim-bays');
-        if (!painel) return;
-        painel.replaceChildren();
-        const porCais = new Map();
-        for (const registo of estadoTerminal) {
-            if (registo.CaisAlocado != null && registo.Estado !== 'Concluido') porCais.set(registo.CaisAlocado, registo);
-        }
+        const porCais = new Map(ocupados.map(v => [alocacoes.get(v.Id), v]));
+        const assinatura = SimulacaoPlanta.cais.map(c => `${c.id}:${porCais.get(c.id)?.Id ?? ''}:${porCais.get(c.id)?.caisAtracado ?? ''}`).join('|');
+        if (assinatura === assinaturaPainel) return;
+        assinaturaPainel = assinatura;
 
+        painel.replaceChildren();
         for (const c of SimulacaoPlanta.cais) {
-            const registo = porCais.get(c.id);
+            const v = porCais.get(c.id);
             const linha = document.createElement('div');
             linha.className = 'sim-bay-row';
-            const estado = registo ? (registo.Estado === 'Atracado' ? 'Atracado' : 'Alocado') : 'Livre';
-            const detalhe = registo ? `${registo.AutocarroId} · ${registo.Zona}` : 'Disponível';
+            const estado = v ? (v.caisAtracado ? 'Atracado' : 'Ocupado') : 'Livre';
+            const detalhe = v ? `${v.ViagemId} · ${v.zona}${v.ForaDoPlano ? ' · fora do plano' : ''}` : 'Disponível';
             linha.append(texto('span', `Cais ${c.id} · ${estado}`), texto('span', detalhe));
             painel.append(linha);
         }
-
-        const ocupados = estadoTerminal.filter(r => r.CaisAlocado != null && r.Estado !== 'Concluido').length;
-        const total = SimulacaoPlanta.cais.length;
-        el('sim-bay-count').textContent = `${ocupados} / ${total}`;
+        el('sim-bay-count').textContent = `${ocupados.length} / ${SimulacaoPlanta.cais.length}`;
     }
 
     async function garantirTokenTerminal() {
@@ -339,13 +383,6 @@
         return json;
     }
 
-    async function sincronizarEstadoTerminal(registarEvento = false) {
-        const estado = await pedidoTerminal('estado');
-        estadoTerminal = Array.isArray(estado) ? estado : [];
-        renderPainelCais();
-        if (registarEvento) adicionarEvento(`Estado do terminal sincronizado (${estadoTerminal.length} ativos).`);
-    }
-
     function parar() {
         emExecucao = false;
         ultimoFrame = null;
@@ -368,13 +405,14 @@
         const pedido = carregamento;
 
         parar();
+        versaoPlaneamento++;
         viagens = [];
-        alocacoes.clear();
+        alocacoes = new Map();
         tempo = 0;
         criarLista();
         atualizar();
 
-        ['sim-play', 'sim-reset', 'sim-time', 'sim-bulk-apply'].forEach(id => { el(id).disabled = true; });
+        ['sim-play', 'sim-reset', 'sim-time', 'sim-bulk-apply', 'sim-plan'].forEach(id => { el(id).disabled = true; });
         const status = el('sim-status');
         status.className = 'sim-status';
         status.textContent = 'A carregar circulações...';
@@ -390,12 +428,14 @@
             const dados = await resposta.json();
             if (pedido !== carregamento) return;
 
-            viagens = dados.map(v => ({ ...v, zona: '' }));
+            viagens = dados.map(v => ({ ...v, zona: Object.hasOwn(zonas, v.Categoria ?? '') ? v.Categoria : '', caisAtracado: null }));
             criarLista();
-            planear();
+            ['sim-play', 'sim-reset', 'sim-time', 'sim-bulk-apply', 'sim-plan'].forEach(id => { el(id).disabled = false; });
 
-            ['sim-play', 'sim-reset', 'sim-time', 'sim-bulk-apply'].forEach(id => { el(id).disabled = false; });
-            status.textContent = `${viagens.length} circulações carregadas. Escolha as zonas para iniciar a simulação.`;
+            const semCategoria = viagens.filter(v => !v.zona).length;
+            await planear();
+            if (semCategoria)
+                adicionarEvento(`${semCategoria} circulações sem categoria ficaram fora do plano; escolha-lhes uma zona.`, true);
         } catch (erro) {
             if (erro.name === 'AbortError' || pedido !== carregamento) return;
             status.className = 'sim-status error';
@@ -403,61 +443,83 @@
         }
     }
 
+    /** Viagem visada pelo ID do formulário: um carro fora do plano ou uma circulação (de preferência a que está no terminal). */
+    function viagemPorId(id) {
+        const candidatas = viagens.filter(v => v.ViagemId === id);
+        return candidatas.find(v => v.InicioSegundos <= tempo && tempo < v.FimSegundos) ?? candidatas[0] ?? null;
+    }
+
     async function onDespachar(evento) {
         evento.preventDefault();
         const id = el('sim-dispatch-id').value.trim();
         const zona = el('sim-dispatch-zone').value;
-        const chegadaMinutos = Number(el('sim-dispatch-arrival').value);
-        const partidaMinutos = Number(el('sim-dispatch-departure').value);
+        const chegada = lerHora(el('sim-dispatch-arrival').value);
+        let partida = lerHora(el('sim-dispatch-departure').value);
+        if (chegada != null && partida != null && partida <= chegada) partida += 86400; // parte no dia seguinte
 
-        if (!id || !Number.isFinite(chegadaMinutos) || !Number.isFinite(partidaMinutos) || chegadaMinutos < 0 || chegadaMinutos >= partidaMinutos) {
-            mostrarAlertaLotacao('Dados inválidos para despacho.');
-            adicionarEvento('Pedido de despacho rejeitado por dados inválidos.', true);
+        if (!id || chegada == null || partida == null || !Object.hasOwn(zonas, zona)) {
+            mostrarAlertaLotacao('Indique a matrícula, a zona e as horas de chegada e partida (HH:mm:ss).');
+            adicionarEvento('Despacho rejeitado por dados inválidos.', true);
+            return;
+        }
+        if (viagens.some(v => v.ForaDoPlano && v.ViagemId === id)) {
+            mostrarAlertaLotacao(`Já existe um carro fora do plano com o identificador ${id}.`);
             return;
         }
 
-        try {
-            const resposta = await pedidoTerminal('chegada', 'POST', { id, zona, chegadaMinutos, partidaMinutos });
-            esconderAlertaLotacao();
-            adicionarEvento(`[OR-Tools] ${id} atribuído ao cais ${resposta.CaisAtribuido}.`);
-            caisSelecionado = resposta.CaisAtribuido;
-            await sincronizarEstadoTerminal();
-        } catch (erro) {
-            mostrarAlertaLotacao(erro.message);
-            adicionarEvento(`[OR-Tools] Falta de espaço para ${id}: ${erro.message}`, true);
-            await sincronizarEstadoTerminal();
+        const extra = {
+            Id: `extra-${id}`, ViagemId: id, Operador: 'Fora do plano', Linha: null, Origem: null, Destino: null,
+            InicioSegundos: chegada, FimSegundos: partida, PermanenciaEstimada: false, Categoria: null,
+            ForaDoPlano: true, zona, caisAtracado: null
+        };
+        viagens.push(extra);
+        criarLista();
+        adicionarEvento(`[Despacho] ${id} (${zona}) ${hora(chegada)} – ${hora(partida)} acrescentado ao plano.`);
+
+        const plano = await planear();
+        if (!plano) return;
+        const cais = alocacoes.get(extra.Id);
+        if (cais != null) {
+            caisSelecionado = cais;
+            adicionarEvento(`[OR-Tools] ${id} atribuído ao cais ${cais}.`);
+            atualizar();
+        } else {
+            adicionarEvento(`[OR-Tools] Sem cais para ${id}: o terminal está cheio nessa janela.`, true);
         }
     }
 
-    async function onAtracar() {
-        const id = el('sim-dispatch-id').value.trim();
-        if (!id) return;
-        try {
-            await pedidoTerminal(`atracar/${encodeURIComponent(id)}`, 'POST');
-            esconderAlertaLotacao();
-            adicionarEvento(`[Operação] ${id} marcado como atracado.`);
-            await sincronizarEstadoTerminal();
-        } catch (erro) {
-            mostrarAlertaLotacao(erro.message);
-            adicionarEvento(`[Operação] Falha ao atracar ${id}: ${erro.message}`, true);
+    function onAtracar() {
+        const v = viagemPorId(el('sim-dispatch-id').value.trim());
+        const cais = v ? alocacoes.get(v.Id) : null;
+        if (!v || cais == null) {
+            adicionarEvento('[Operação] Autocarro não encontrado ou sem cais atribuído.', true);
+            return;
         }
+        v.caisAtracado = cais;
+        adicionarEvento(`[Operação] ${v.ViagemId} atracado no cais ${cais} (fica fixo ao replanear).`);
+        assinaturaPainel = '';
+        atualizar();
     }
 
     async function onPartida() {
-        const id = el('sim-dispatch-id').value.trim();
-        if (!id) return;
-        try {
-            await pedidoTerminal(`partida/${encodeURIComponent(id)}`, 'POST');
-            esconderAlertaLotacao();
-            adicionarEvento(`[Operação] ${id} marcado como partida.`);
-            await sincronizarEstadoTerminal();
-        } catch (erro) {
-            mostrarAlertaLotacao(erro.message);
-            adicionarEvento(`[Operação] Falha ao concluir ${id}: ${erro.message}`, true);
+        const v = viagemPorId(el('sim-dispatch-id').value.trim());
+        if (!v || tempo >= v.FimSegundos) {
+            adicionarEvento('[Operação] Autocarro não encontrado ou já partiu.', true);
+            return;
         }
+        if (tempo < v.InicioSegundos) {
+            adicionarEvento(`[Operação] ${v.ViagemId} ainda não chegou (${hora(v.InicioSegundos)}).`, true);
+            return;
+        }
+        v.FimSegundos = Math.max(v.InicioSegundos + 60, Math.floor(tempo));
+        v.caisAtracado = null;
+        adicionarEvento(`[Operação] ${v.ViagemId} partiu às ${hora(v.FimSegundos)}; cais libertado.`);
+        criarLista();
+        await planear();
     }
 
     el('sim-load').addEventListener('click', carregar);
+    el('sim-plan').addEventListener('click', () => planear());
     el('sim-date').addEventListener('change', carregar);
     el('sim-dispatch-form').addEventListener('submit', onDespachar);
     el('sim-dispatch-dock').addEventListener('click', onAtracar);
@@ -471,8 +533,8 @@
         const cais = SimulacaoPlanta.encontrarCais(x, y);
         if (!cais) return;
         caisSelecionado = cais.id;
-        const registo = estadoTerminal.find(r => r.CaisAlocado === cais.id && r.Estado !== 'Concluido');
-        if (registo) el('sim-dispatch-id').value = registo.AutocarroId;
+        const v = viagens.find(a => alocacoes.get(a.Id) === cais.id && a.InicioSegundos <= tempo && tempo < a.FimSegundos);
+        if (v) el('sim-dispatch-id').value = v.ViagemId;
         atualizar();
     });
 
@@ -490,19 +552,21 @@
     el('sim-time').addEventListener('input', e => {
         tempo = Number(e.target.value);
         atualizar();
-        const minutos = Math.floor(tempo / 60);
-        el('sim-dispatch-arrival').value = String(minutos);
-        el('sim-dispatch-departure').value = String(Math.min(1440, minutos + 20));
+        el('sim-dispatch-arrival').value = hora(Math.min(tempo, 86399));
+        el('sim-dispatch-departure').value = hora(Math.min(tempo, 86399) + 20 * 60).slice(0, 8);
     });
 
     el('sim-bulk-apply').addEventListener('click', () => {
         const zona = el('sim-bulk-zone').value;
-        viagens.forEach(v => { v.zona = zona; });
+        viagens.forEach(v => {
+            if (v.ForaDoPlano) return;
+            v.zona = zona === '*' ? (Object.hasOwn(zonas, v.Categoria ?? '') ? v.Categoria : '') : zona;
+            v.caisAtracado = null;
+        });
         criarLista();
         planear();
     });
 
     carregar();
-    sincronizarEstadoTerminal(true).catch(() => adicionarEvento('Não foi possível sincronizar o estado do terminal.', true));
     requestAnimationFrame(frame);
 })();

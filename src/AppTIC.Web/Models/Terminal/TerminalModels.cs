@@ -1,13 +1,15 @@
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 
 namespace AppTIC.Web.Models.Terminal;
 
+/// <summary>Classificação de atribuição de cais: Lisboa 1–4, Fora 5–8, Norte 9–10, Comum 11–17.</summary>
 public enum ZonaCais
 {
-    Lisboa,
-    Fora,
-    Norte,
-    Outros
+    [Display(Name = "Lisboa")] Lisboa = 0,
+    [Display(Name = "Fora")] Fora = 1,
+    [Display(Name = "Norte")] Norte = 2,
+    [Display(Name = "Comum")] Comum = 3
 }
 
 public enum EstadoAutocarro
@@ -39,3 +41,6 @@ public record NovaChegadaRequest(
     [property: JsonRequired] ZonaCais Zona,
     [property: JsonRequired] int ChegadaMinutos,
     [property: JsonRequired] int PartidaMinutos);
+
+/// <summary>Resultado do planeamento do dia: cais atribuídos e autocarros que não couberam.</summary>
+public record PlaneamentoDia(IReadOnlyList<AlocacaoResposta> Alocacoes, IReadOnlyList<string> SemCais, bool Otimo);

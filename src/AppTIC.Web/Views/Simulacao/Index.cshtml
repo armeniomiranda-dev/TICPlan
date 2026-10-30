@@ -15,14 +15,15 @@
         <div class="sim-clock"><span>HORA SIMULADA</span><strong id="sim-clock">00:00:00</strong></div>
     </div>
     <div class="sim-notice">
-        Os horários são planeados, não posições em tempo real. Escolha uma zona para cada circulação a simular;
-        os cais são atribuídos apenas nesta página pela regra do primeiro cais livre, não pelo resolvedor operacional.
-        Os cais 11–17 são uma reserva comum simulada, utilizada quando os cais da zona estiverem ocupados.
+        Os horários são planeados, não posições em tempo real. Cada circulação entra com a zona da sua categoria
+        (Lisboa, Fora, Norte ou Comum), que pode alterar aqui; o plano do dia é otimizado pelo Algoritmo de Otimização, que maximiza
+        os autocarros com cais e só usa a reserva 9–10 (Lisboa e Fora) quando os cais da zona estão ocupados.
         Reiniciar ou fechar não altera a operação nem a base de dados.
     </div>
     <div class="sim-controls">
         <label>Data <input id="sim-date" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" /></label>
         <button id="sim-load" type="button"><i class="bi bi-arrow-clockwise"></i> Carregar</button>
+        <button id="sim-plan" type="button" disabled><i class="bi bi-cpu"></i> Planear dia (Algoritmo de Otimização)</button>
         <button id="sim-play" type="button" disabled><i class="bi bi-play-fill"></i> Iniciar</button>
         <button id="sim-reset" type="button" disabled>Reiniciar</button>
         <label>Velocidade
@@ -39,41 +40,40 @@
     </div>
     <div class="sim-grid">
         <section class="sim-panel sim-map">
-            <div class="sim-panel-heading"><h2>Terminal · planta esquemática</h2><span>Lisboa 1–4 · Fora 5–8 · Norte 9–10 · Reserva comum 11–17</span></div>
+            <div class="sim-panel-heading"><h2>Terminal · planta esquemática</h2><span>Lisboa 1–4 · Fora 5–8 · Norte 9–10 · Comum 11–17</span></div>
             <canvas id="sim-canvas" width="1100" height="500" aria-label="Planta esquemática do terminal: cais 1 a 17 disponíveis para a simulação"></canvas>
             <div id="sim-summary" class="sim-summary"></div>
             <div id="sim-inspector" class="sim-inspector" role="status">Selecione um cais no mapa para ver os detalhes.</div>
             <div id="sim-conflicts" class="sim-conflicts" role="status"></div>
-            
-            <div class="sim-panel-heading"><h2>Despacho Otimizador</h2><span id="sim-count">0</span></div>
-            <p>Despacho manual para o resolvedor de cais. Conversão: segundos simulados para minutos do dia.</p>
+
+            <div class="sim-panel-heading"><h2>Despacho · carro fora do plano</h2></div>
+            <p>Acrescenta um autocarro que não está no plano do dia e volta a otimizar com o Algoritmo de Otimização; os autocarros já atracados mantêm o cais.</p>
             <form id="sim-dispatch-form" class="sim-dispatch-form">
                 <label>ID / Matrícula <input id="sim-dispatch-id" type="text" placeholder="BUS-001" /></label>
                 <label>
                     Zona
-                    <select id="sim-dispatch-zone"><option>Lisboa</option><option>Fora</option><option>Norte</option><option>Outros</option></select>
+                    <select id="sim-dispatch-zone"><option>Lisboa</option><option>Fora</option><option>Norte</option><option>Comum</option></select>
                 </label>
-                <label>Chegada (min) <input id="sim-dispatch-arrival" type="number" min="0" max="1439" value="600" /></label>
-                <label>Partida (min) <input id="sim-dispatch-departure" type="number" min="1" max="1440" value="620" /></label>
+                <label>Chegada <input id="sim-dispatch-arrival" type="time" step="1" value="10:00:00" /></label>
+                <label>Partida <input id="sim-dispatch-departure" type="time" step="1" value="10:20:00" /></label>
                 <div class="sim-dispatch-actions">
-                    <button id="sim-dispatch-send" type="submit">Despachar</button>
+                    <button id="sim-dispatch-send" type="submit">Adicionar ao plano</button>
                     <button id="sim-dispatch-dock" type="button">Marcar atracado</button>
                     <button id="sim-dispatch-leave" type="button">Marcar partida</button>
                 </div>
             </form>
-      
-            <div class="sim-panel-heading sim-sub-heading"><h3>Eventos do algoritmo</h3><button id="sim-events-clear" type="button">Limpar</button></div>
 
+            <div class="sim-panel-heading sim-sub-heading"><h3>Eventos do algoritmo</h3><button id="sim-events-clear" type="button">Limpar</button></div>
+            <div id="sim-events" class="sim-events" aria-live="polite"></div>
         </section>
         <section class="sim-panel sim-trips">
             <div class="sim-panel-heading sim-sub-heading"><h3>Painel de cais</h3><span id="sim-bay-count">0</span></div>
             <div id="sim-bays" class="sim-bays" aria-live="polite"></div>
-            <div id="sim-events" class="sim-events" aria-live="polite"></div>
-            <div class="sim-panel-heading sim-sub-heading"><h3>Circulações do dia</h3></div>
-            <p>Indique a zona para incluir cada circulação. A zona e o cais são hipotéticos.</p>
+            <div class="sim-panel-heading sim-sub-heading"><h3>Circulações do dia</h3><span id="sim-count">0</span></div>
+            <p>A zona vem da categoria da circulação; altere-a para simular outra atribuição. A zona e o cais são hipotéticos.</p>
             <label class="sim-bulk">
                 Aplicar zona a todas
-                <select id="sim-bulk-zone"><option value="">Sem zona</option><option>Lisboa</option><option>Fora</option><option>Norte</option><option>Outros</option></select>
+                <select id="sim-bulk-zone"><option value="*">Categoria da circulação</option><option value="">Sem zona</option><option>Lisboa</option><option>Fora</option><option>Norte</option><option>Comum</option></select>
                 <button id="sim-bulk-apply" type="button" disabled>Aplicar</button>
             </label>
             <div id="sim-list" class="sim-list"></div>

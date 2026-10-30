@@ -1,4 +1,5 @@
 using AppTIC.Web.Data;
+using AppTIC.Web.Models.Terminal;
 using Microsoft.EntityFrameworkCore;
 
 namespace AppTIC.Web.Services;
@@ -6,11 +7,12 @@ namespace AppTIC.Web.Services;
 public record SimulacaoOrigem(
     int CirculacaoId, DateOnly Data, string ViagemId, string Operador,
     string? Linha, string? Origem, string? Destino,
-    TimeOnly? Chegada, TimeOnly? Partida, int PermanenciaMinutos);
+    TimeOnly? Chegada, TimeOnly? Partida, int PermanenciaMinutos, ZonaCais? Categoria = null);
 
+/// <summary>Categoria: zona de cais da circulação (Lisboa/Fora/Norte/Comum), em texto para o JS.</summary>
 public record SimulacaoPassagem(
     string Id, string ViagemId, string Operador, string? Linha, string? Origem, string? Destino,
-    DateOnly DataCirculacao, int InicioSegundos, int FimSegundos, bool PermanenciaEstimada);
+    DateOnly DataCirculacao, int InicioSegundos, int FimSegundos, bool PermanenciaEstimada, string? Categoria = null);
 
 public class SimulacaoService(ApplicationDbContext db, IConfiguration config)
 {
@@ -32,7 +34,8 @@ public class SimulacaoService(ApplicationDbContext db, IConfiguration config)
                 Destino = d.Circulacao.Destino == null ? null : d.Circulacao.Destino.Nome,
                 d.Circulacao.Chegada,
                 d.Circulacao.Partida,
-                d.Circulacao.TempoEmbarqueMinutos
+                d.Circulacao.TempoEmbarqueMinutos,
+                d.Circulacao.Categoria
             }).ToListAsync(ct);
 
         var ids = dias.Select(d => d.CirculacaoId).Distinct().ToArray();
@@ -49,7 +52,7 @@ public class SimulacaoService(ApplicationDbContext db, IConfiguration config)
                     d.CirculacaoId, d.Data, d.ViagemId, d.Operador, d.Linha, d.Origem, d.Destino,
                     periodo is not null ? periodo.Chegada : d.Chegada,
                     periodo is not null ? periodo.Partida : d.Partida,
-                    d.TempoEmbarqueMinutos ?? permanenciaPorOmissao));
+                    d.TempoEmbarqueMinutos ?? permanenciaPorOmissao, d.Categoria));
             })
             .OfType<SimulacaoPassagem>()
             .OrderBy(p => p.InicioSegundos).ThenBy(p => p.Id)
@@ -68,6 +71,7 @@ public class SimulacaoService(ApplicationDbContext db, IConfiguration config)
             origem.Linha, origem.Origem, origem.Destino, origem.Data,
             (int)(permanencia.Inicio - inicioDia).TotalSeconds,
             (int)(permanencia.Fim - inicioDia).TotalSeconds,
-            origem.Chegada is null || origem.Partida is null);
+            origem.Chegada is null || origem.Partida is null,
+            origem.Categoria?.ToString());
     }
 }

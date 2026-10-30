@@ -61,6 +61,7 @@
         <div class="col-md-3"><span class="text-muted">Operador</span><br />@Model.Operador?.Designacao</div>
         <div class="col-md-3"><span class="text-muted">Linha</span><br />@Model.LinhaId @Model.DesignacaoLinha</div>
         <div class="col-md-2"><span class="text-muted">Âmbito</span><br />@Model.Ambito?.DisplayName()</div>
+        <div class="col-md-2"><span class="text-muted">Categoria</span><br />@(Model.Categoria?.DisplayName() ?? "–")</div>
         <div class="col-md-2"><span class="text-muted">Autorização</span><br />@Model.Autorizacao @(Model.AutorizacaoValidade is { } v ? $"(até {v:dd/MM/yyyy})" : "")</div>
         <div class="col-md-2"><span class="text-muted">ID TIC</span><br />@Model.IdTic</div>
         <div class="col-md-3"><span class="text-muted">Origem → destino</span><br />@Model.Origem?.Nome → @Model.Destino?.Nome</div>
