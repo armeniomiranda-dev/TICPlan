@@ -5,7 +5,8 @@
     const el = id => document.getElementById(id);
     const zonas = SimulacaoPlaneador.zonas;
     const caisComuns = SimulacaoPlaneador.caisComuns;
-    const cores = { Lisboa: '#3b82f6', Fora: '#f59e0b', Norte: '#a855f7', Comum: '#10b981' };
+    const cores = { Lisboa: '#3b82f6', Internacional: '#f59e0b', Norte: '#a855f7', Comum: '#10b981' };
+    const rotulos = { Lisboa: 'Lisboa', Internacional: 'Internacional', Norte: 'Norte de Portugal', Comum: 'Comum' };
     const canvas = el('sim-canvas');
     const ctx = canvas.getContext('2d');
 
@@ -68,7 +69,7 @@
     }
 
     function caisPermitidos(zona) {
-        return zona === 'Norte' ? zonas.Norte : [...zonas[zona], ...caisComuns];
+        return [...zonas[zona], ...caisComuns];
     }
 
     /** Cais que não pode mudar ao replanear: atracado manualmente ou já ocupado à hora simulada. */
@@ -173,7 +174,7 @@
             for (const nome of ['', ...Object.keys(zonas)]) {
                 const option = document.createElement('option');
                 option.value = nome;
-                option.textContent = nome || 'Não atribuída';
+                option.textContent = rotulos[nome] ?? 'Não atribuída';
                 select.append(option);
             }
             select.value = v.zona;
@@ -312,10 +313,10 @@
         resumo.replaceChildren();
         for (const zona of Object.keys(zonas)) {
             const numero = ocupados.filter(v => zonas[zona].includes(alocacoes.get(v.Id))).length;
-            resumo.append(texto('span', `${zona}: ${numero} / ${zonas[zona].length}`));
+            resumo.append(texto('span', `${rotulos[zona]}: ${numero} / ${zonas[zona].length}`));
         }
-        const emReserva = ocupados.filter(v => v.zona !== 'Norte' && caisComuns.includes(alocacoes.get(v.Id))).length;
-        resumo.append(texto('span', `Reserva 9–10 (Lisboa/Fora): ${emReserva}`));
+        const emReserva = ocupados.filter(v => v.zona !== 'Comum' && caisComuns.includes(alocacoes.get(v.Id))).length;
+        resumo.append(texto('span', `Zonas lotadas nos cais comuns: ${emReserva}`));
 
         el('sim-conflicts').textContent = semCais.length
             ? `Sem cais na simulação (${semCais.length}): ${semCais.map(v => v.ViagemId).join(', ')}`
@@ -326,7 +327,7 @@
 
         if (caisSelecionado !== null) {
             const v = ocupados.find(a => alocacoes.get(a.Id) === caisSelecionado);
-            const reserva = caisComuns.includes(caisSelecionado) ? ' (reserva de Lisboa/Fora)' : '';
+            const reserva = caisComuns.includes(caisSelecionado) ? ' (cais comum)' : '';
             el('sim-inspector').textContent = v
                 ? `Cais ${caisSelecionado}: ${v.ViagemId} · ${v.Operador} · ${v.zona} · ${hora(v.InicioSegundos)} – ${hora(v.FimSegundos)}${v.caisAtracado ? ' · atracado' : ''}`
                 : `Cais ${caisSelecionado}: livre na simulação${reserva}.`;

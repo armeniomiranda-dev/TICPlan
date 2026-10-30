@@ -19,7 +19,7 @@ public class Circulacao : OwnedEntity
     [Display(Name = "Âmbito")]
     public Ambito? Ambito { get; set; }
 
-    /// <summary>Categoria usada na atribuição de cais (Lisboa/Fora/Norte/Comum).</summary>
+    /// <summary>Categoria usada na atribuição de cais (Lisboa/Internacional/Norte/Comum).</summary>
     [Display(Name = "Categoria (atribuição de cais)")]
     public ZonaCais? Categoria { get; set; }
 

@@ -53,3 +53,12 @@
 @media (max-width: 992px) { .sim-grid { grid-template-columns: 1fr; } }
 .sim-trip.fora-plano { border-color: #f43f5e; }
 .sim-dispatch-form input[type=time] { color-scheme: dark; }
+.sim-notice p { margin: 0 0 .6rem; }
+.sim-legenda { border-collapse: collapse; font-size: .8rem; color: #e2e8f0; }
+.sim-legenda caption { caption-side: top; text-align: left; font-weight: 600; color: #bae6fd; padding-bottom: .3rem; }
+.sim-legenda th, .sim-legenda td { padding: .3rem .9rem .3rem 0; border-bottom: 1px solid #155e75; text-align: left; vertical-align: top; }
+.sim-legenda td:nth-child(2) { white-space: nowrap; }
+.sim-legenda thead th { color: #94a3b8; font-weight: 600; }
+.sim-legenda tbody th { font-weight: 600; }
+.sim-legenda tbody tr:last-child th, .sim-legenda tbody tr:last-child td { border-bottom: 0; }
+.sim-zona { display: inline-block; width: .7rem; height: .7rem; border-radius: .15rem; margin-right: .45rem; vertical-align: -.05rem; background: var(--cor); }

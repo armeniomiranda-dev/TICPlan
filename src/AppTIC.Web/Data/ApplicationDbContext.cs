@@ -61,7 +61,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         {
             e.HasIndex(x => new { x.OwnerId, x.ViagemId }).IsUnique();
             e.Property(x => x.Ambito).HasConversion<string>().HasMaxLength(30);
-            e.Property(x => x.Categoria).HasConversion<string>().HasMaxLength(10);
+            e.Property(x => x.Categoria).HasConversion<string>().HasMaxLength(30);
             e.HasOne(x => x.Operador).WithMany(o => o.Circulacoes).HasForeignKey(x => x.OperadorId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.Origem).WithMany().HasForeignKey(x => x.OrigemId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(x => x.Destino).WithMany().HasForeignKey(x => x.DestinoId).OnDelete(DeleteBehavior.SetNull);

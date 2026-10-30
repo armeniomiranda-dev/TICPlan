@@ -1,8 +1,8 @@
 'use strict';
 
 const SimulacaoPlaneador = (() => {
-    const zonas = { Lisboa: [1, 2, 3, 4], Fora: [5, 6, 7, 8], Norte: [9, 10], Comum: [11, 12, 13, 14, 15, 16, 17] };
-    const caisComuns = [9, 10];
+    const zonas = { Lisboa: [1, 2, 3, 4], Internacional: [5, 6, 7, 8], Norte: [9, 10], Comum: [11, 12, 13, 14, 15, 16, 17] };
+    const caisComuns = [11, 12, 13, 14, 15, 16, 17];
 
     function alocar(viagens) {
         const eventos = [];
@@ -21,7 +21,7 @@ const SimulacaoPlaneador = (() => {
                 if (cais != null) ocupados.delete(cais);
             } else {
                 const primarios = zonas[v.zona];
-                const reserva = v.zona === 'Norte' ? [] : caisComuns;
+                const reserva = caisComuns;
                 const cais = primarios.find(id => !ocupados.has(id))
                     ?? reserva.find(id => !ocupados.has(id)) ?? null;
                 alocacoes.set(v.Id, cais);

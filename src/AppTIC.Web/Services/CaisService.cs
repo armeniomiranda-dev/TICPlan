@@ -16,11 +16,14 @@ public interface ICaisService
 
 public class CaisService : ICaisService
 {
-    private static readonly int[] ReservaComum = [9, 10];
+    /// <summary>Cais comuns (11–17): da categoria Comum e reserva de qualquer zona lotada.</summary>
+    private static readonly int[] CaisComuns = [11, 12, 13, 14, 15, 16, 17];
 
     public IReadOnlyList<AlocacaoResposta>? AlocarCais(IReadOnlyList<AutocarroDto> autocarros)
     {
         var (model, escolhas) = Construir(autocarros, obrigatorio: true);
+        // Os cais comuns só se usam quando os da zona estão ocupados.
+        model.Minimize(LinearExpr.Sum(escolhas.Where(e => e.Reserva).Select(e => (ILiteral)e.Escolhido)));
 
         var solver = new CpSolver();
         var status = solver.Solve(model);
@@ -73,15 +76,14 @@ public class CaisService : ICaisService
             var caisPrimarios = autocarro.Zona switch
             {
                 ZonaCais.Lisboa => Enumerable.Range(1, 4),
-                ZonaCais.Fora => Enumerable.Range(5, 4),
+                ZonaCais.Internacional => Enumerable.Range(5, 4),
                 ZonaCais.Norte => Enumerable.Range(9, 2),
-                ZonaCais.Comum => Enumerable.Range(11, 7),
+                ZonaCais.Comum => CaisComuns,
                 _ => throw new ArgumentOutOfRangeException(nameof(autocarros), "Zona de cais inválida.")
             };
 
-            var caisDisponiveis = autocarro.Zona == ZonaCais.Norte
-                ? caisPrimarios
-                : caisPrimarios.Concat(ReservaComum).Distinct();
+            // Uma zona lotada pode usar os cais comuns; nunca os cais de outra zona.
+            var caisDisponiveis = caisPrimarios.Concat(CaisComuns).Distinct();
 
             var opcoes = new List<BoolVar>();
             foreach (var cais in caisDisponiveis)

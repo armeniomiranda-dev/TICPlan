@@ -153,8 +153,8 @@ namespace AppTIC.Web.Data.Migrations
                         .HasColumnName("autorizacao_validade");
 
                     b.Property<string>("Categoria")
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
                         .HasColumnName("categoria");
 
                     b.Property<TimeOnly?>("Chegada")

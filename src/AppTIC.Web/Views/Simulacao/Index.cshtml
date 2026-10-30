@@ -15,10 +15,24 @@
         <div class="sim-clock"><span>HORA SIMULADA</span><strong id="sim-clock">00:00:00</strong></div>
     </div>
     <div class="sim-notice">
-        Os horários são planeados, não posições em tempo real. Cada circulação entra com a zona da sua categoria
-        (Lisboa, Fora, Norte ou Comum), que pode alterar aqui; o plano do dia é otimizado pelo Algoritmo de Otimização, que maximiza
-        os autocarros com cais e só usa a reserva 9–10 (Lisboa e Fora) quando os cais da zona estão ocupados.
-        Reiniciar ou fechar não altera a operação nem a base de dados.
+        <p>
+            Os horários são planeados, não posições em tempo real. Cada circulação entra com a zona da sua categoria,
+            que pode ser alterada aqui para simular outra atribuição. O plano do dia é calculado pelo Algoritmo de Otimização,
+            que atribui cais ao maior número possível de autocarros, nunca no cais de outra zona.
+            Reiniciar ou fechar não altera a operação nem a base de dados.
+        </p>
+        <table class="sim-legenda">
+            <caption>Atribuição de cais por categoria</caption>
+            <thead>
+                <tr><th scope="col">Categoria</th><th scope="col">Cais</th><th scope="col">Se a zona estiver cheia</th></tr>
+            </thead>
+            <tbody>
+                <tr><th scope="row"><span class="sim-zona" style="--cor: #3b82f6"></span>Lisboa</th><td>1–4</td><td>cais comuns 11–17</td></tr>
+                <tr><th scope="row"><span class="sim-zona" style="--cor: #f59e0b"></span>Internacional</th><td>5–8</td><td>cais comuns 11–17</td></tr>
+                <tr><th scope="row"><span class="sim-zona" style="--cor: #a855f7"></span>Norte de Portugal</th><td>9–10</td><td>cais comuns 11–17</td></tr>
+                <tr><th scope="row"><span class="sim-zona" style="--cor: #10b981"></span>Comum (as restantes)</th><td>11–17</td><td>—</td></tr>
+            </tbody>
+        </table>
     </div>
     <div class="sim-controls">
         <label>Data <input id="sim-date" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" /></label>
@@ -40,7 +54,7 @@
     </div>
     <div class="sim-grid">
         <section class="sim-panel sim-map">
-            <div class="sim-panel-heading"><h2>Terminal · planta esquemática</h2><span>Lisboa 1–4 · Fora 5–8 · Norte 9–10 · Comum 11–17</span></div>
+            <div class="sim-panel-heading"><h2>Terminal · planta esquemática</h2><span>Lisboa 1–4 · Internacional 5–8 · Norte de Portugal 9–10 · Comum 11–17</span></div>
             <canvas id="sim-canvas" width="1100" height="500" aria-label="Planta esquemática do terminal: cais 1 a 17 disponíveis para a simulação"></canvas>
             <div id="sim-summary" class="sim-summary"></div>
             <div id="sim-inspector" class="sim-inspector" role="status">Selecione um cais no mapa para ver os detalhes.</div>
@@ -52,7 +66,7 @@
                 <label>ID / Matrícula <input id="sim-dispatch-id" type="text" placeholder="BUS-001" /></label>
                 <label>
                     Zona
-                    <select id="sim-dispatch-zone"><option>Lisboa</option><option>Fora</option><option>Norte</option><option>Comum</option></select>
+                    <select id="sim-dispatch-zone"><option>Lisboa</option><option>Internacional</option><option value="Norte">Norte de Portugal</option><option>Comum</option></select>
                 </label>
                 <label>Chegada <input id="sim-dispatch-arrival" type="time" step="1" value="10:00:00" /></label>
                 <label>Partida <input id="sim-dispatch-departure" type="time" step="1" value="10:20:00" /></label>
@@ -73,7 +87,7 @@
             <p>A zona vem da categoria da circulação; altere-a para simular outra atribuição. A zona e o cais são hipotéticos.</p>
             <label class="sim-bulk">
                 Aplicar zona a todas
-                <select id="sim-bulk-zone"><option value="*">Categoria da circulação</option><option value="">Sem zona</option><option>Lisboa</option><option>Fora</option><option>Norte</option><option>Comum</option></select>
+                <select id="sim-bulk-zone"><option value="*">Categoria da circulação</option><option value="">Sem zona</option><option>Lisboa</option><option>Internacional</option><option value="Norte">Norte de Portugal</option><option>Comum</option></select>
                 <button id="sim-bulk-apply" type="button" disabled>Aplicar</button>
             </label>
             <div id="sim-list" class="sim-list"></div>

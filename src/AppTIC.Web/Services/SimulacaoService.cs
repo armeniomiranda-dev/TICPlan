@@ -9,7 +9,7 @@ public record SimulacaoOrigem(
     string? Linha, string? Origem, string? Destino,
     TimeOnly? Chegada, TimeOnly? Partida, int PermanenciaMinutos, ZonaCais? Categoria = null);
 
-/// <summary>Categoria: zona de cais da circulação (Lisboa/Fora/Norte/Comum), em texto para o JS.</summary>
+/// <summary>Categoria: zona de cais da circulação (Lisboa/Internacional/Norte/Comum), em texto para o JS.</summary>
 public record SimulacaoPassagem(
     string Id, string ViagemId, string Operador, string? Linha, string? Origem, string? Destino,
     DateOnly DataCirculacao, int InicioSegundos, int FimSegundos, bool PermanenciaEstimada, string? Categoria = null);

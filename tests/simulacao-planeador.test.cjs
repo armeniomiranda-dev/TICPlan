@@ -8,7 +8,7 @@ const viagem = (Id, zona, InicioSegundos, FimSegundos) => ({ Id, zona, InicioSeg
 
 test('respeita zonas e não inclui viagens sem zona ou duração', () => {
     const resultado = alocar([
-        viagem('a', 'Lisboa', 0, 100), viagem('b', 'Fora', 0, 100),
+        viagem('a', 'Lisboa', 0, 100), viagem('b', 'Internacional', 0, 100),
         viagem('c', 'Norte', 0, 100), viagem('f', 'Comum', 0, 100),
         viagem('d', '', 0, 100), viagem('e', 'Norte', 0, 0)
     ]);
@@ -32,17 +32,18 @@ test('rejeita sobrelotação sem libertar cais ocupado por outro autocarro', () 
     assert.equal(resultado.get('d'), null);
 });
 
-test('a reserva é partilhada por zonas e liberta na partida', () => {
+test('zonas lotadas usam os cais comuns, nunca os de outra zona, e libertam na partida', () => {
     const resultado = alocar([
-        ...Array.from({ length: 7 }, (_, i) => viagem(`o${i}`, 'Comum', 0, 100)),
-        viagem('o7', 'Comum', 1, 50),
         ...Array.from({ length: 4 }, (_, i) => viagem(`l${i}`, 'Lisboa', 0, 100)),
-        viagem('l4', 'Lisboa', 2, 100),
-        viagem('o8', 'Comum', 50, 100)
+        viagem('l4', 'Lisboa', 2, 50),
+        viagem('l5', 'Lisboa', 50, 100),
+        ...Array.from({ length: 2 }, (_, i) => viagem(`n${i}`, 'Norte', 0, 100)),
+        viagem('n2', 'Norte', 5, 100)
     ]);
-    assert.equal(resultado.get('o7'), 9);
-    assert.equal(resultado.get('l4'), 10);
-    assert.equal(resultado.get('o8'), 9);
+    assert.equal(resultado.get('l4'), 11);
+    assert.equal(resultado.get('l5'), 11);
+    assert.equal(resultado.get('n2'), 12);
+    assert.ok([...resultado.values()].every(c => c == null || c < 5 || c > 8));
 });
 
 test('cada zona prefere os seus próprios cais mesmo com reserva livre', () => {

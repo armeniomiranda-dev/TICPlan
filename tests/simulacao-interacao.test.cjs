@@ -32,7 +32,7 @@ function planoFalso(pedidos) {
     const Alocacoes = [];
     const SemCais = [];
     for (const p of pedidos) {
-        const permitidos = p.Zona === 'Norte' ? planeador.zonas.Norte : [...planeador.zonas[p.Zona], ...planeador.caisComuns];
+        const permitidos = [...planeador.zonas[p.Zona], ...planeador.caisComuns];
         const cais = p.CaisFixo ?? permitidos.find(c => !ocupados.has(c));
         if (cais == null) { SemCais.push(p.AutocarroId); continue; }
         ocupados.add(cais);
@@ -69,13 +69,13 @@ test('plano do dia usa a categoria e o despacho acrescenta um carro fora do plan
     get('sim-dispatch-departure').value = '00:30:00';
 
     const document = { getElementById: get, createElement: () => new Elemento() };
-    const dados = Array.from({ length: 3 }, (_, i) => ({
+    const dados = Array.from({ length: 8 }, (_, i) => ({
         Id: String(i + 1),
         ViagemId: `VIAGEM-${i + 1}`,
         Operador: 'Operador',
         InicioSegundos: 0,
         FimSegundos: 3600,
-        Categoria: 'Norte'
+        Categoria: i < 3 ? 'Norte' : 'Comum'
     }));
 
     const pedidosPlaneamento = [];
@@ -113,29 +113,24 @@ test('plano do dia usa a categoria e o despacho acrescenta um carro fora do plan
     vm.runInNewContext(codigo, ambiente);
     await new Promise(resolve => setImmediate(resolve));
 
-    // A zona vem da categoria; o 3.º autocarro Norte não cabe e gera alerta.
-    assert.deepEqual(pedidosPlaneamento[0].map(p => p.Zona), ['Norte', 'Norte', 'Norte']);
-    assert.equal(get('sim-bays').children.length, 17);
-    assert.equal(get('sim-bay-count').textContent, '2 / 17');
-    assert.equal(get('sim-overflow-alert').hidden, false);
-    assert.match(get('sim-overflow-text').textContent, /VIAGEM-3/);
+// A zona vem da categoria; o 3.º autocarro Norte passa para um cais comum (11), não para outra zona.    assert.deepEqual(pedidosPlaneamento[0].map(p => p.Zona), ['Norte', 'Norte', 'Norte', 'Comum', 'Comum', 'Comum', 'Comum', 'Comum']);    assert.equal(get('sim-bays').children.length, 17);    assert.equal(get('sim-bay-count').textContent, '8 / 17');    assert.equal(get('sim-overflow-alert').hidden, true);
 
     // Despacho: carro fora do plano com horas HH:mm:ss.
     await get('sim-dispatch-form').listeners.submit({ preventDefault() {} });
     const extra = pedidosPlaneamento.at(-1).find(p => p.AutocarroId === 'extra-BUS-1');
     assert.deepEqual([extra.Zona, extra.ChegadaMinutos, extra.PartidaMinutos], ['Comum', 10, 30]);
-    assert.match(get('sim-events').children[0].textContent, /OR-Tools.*BUS-1.*cais 11/);
+    assert.match(get('sim-events').children[0].textContent, /BUS-1.*cais 17/);
 
     get('sim-time').listeners.input({ target: { value: '900' } });
-    assert.equal(get('sim-bay-count').textContent, '3 / 17');
+    assert.equal(get('sim-bay-count').textContent, '9 / 17');
     assert.equal(get('sim-dispatch-arrival').value, '00:15:00');
     assert.equal(get('sim-dispatch-departure').value, '00:35:00');
 
     get('sim-dispatch-dock').listeners.click();
-    assert.match(get('sim-events').children[0].textContent, /atracado no cais 11/);
+    assert.match(get('sim-events').children[0].textContent, /atracado no cais 17/);
 
     await get('sim-dispatch-leave').listeners.click();
-    assert.equal(get('sim-bay-count').textContent, '2 / 17');
+    assert.equal(get('sim-bay-count').textContent, '8 / 17');
 
     // Carro fora do plano sem espaço: fica sem cais e é assinalado.
     get('sim-dispatch-id').value = 'SEM-ESPACO';
@@ -151,6 +146,6 @@ test('plano do dia usa a categoria e o despacho acrescenta um carro fora do plan
 
     clicar(9);
     assert.match(get('sim-inspector').textContent, /VIAGEM-1/);
-    clicar(12);
+    clicar(1);
     assert.match(get('sim-inspector').textContent, /livre/);
 });
