@@ -18,6 +18,11 @@
     <link rel="stylesheet" href="https://cdn.syncfusion.com/ej2/@sfVersion/bootstrap5.3.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <script src="https://cdn.syncfusion.com/ej2/@sfVersion/dist/ej2.min.js"></script>
+    @* Licença para os controlos criados em JavaScript (ex.: gráfico da página inicial); a de Program.cs só cobre o servidor. *@
+    @if (Config["Syncfusion:LicenseKey"] is { Length: > 0 } sfLicense)
+    {
+        <script>ej.base.registerLicense(@Json.Serialize(sfLicense));</script>
+    }
     @await RenderSectionAsync("Head", required: false)
 </head>
 <body>
@@ -40,6 +45,7 @@
                             <li class="nav-item"><a class="nav-link @Active("Circulacoes")" asp-controller="Circulacoes" asp-action="Index"><i class="bi bi-bus-front"></i> Circulações</a></li>
                             <li class="nav-item"><a class="nav-link @Active("Pedidos")" asp-controller="Pedidos" asp-action="Index"><i class="bi bi-pencil-square"></i> Pedidos</a></li>
                             <li class="nav-item"><a class="nav-link @Active("Calendario")" asp-controller="Calendario" asp-action="Index"><i class="bi bi-calendar3"></i> Calendário</a></li>
+                            <li class="nav-item"><a class="nav-link @Active("Simulacao")" asp-controller="Simulacao" asp-action="Index"><i class="bi bi-play-circle"></i> Simulação</a></li>
                             <li class="nav-item"><a class="nav-link @Active("GtfsFeeds")" asp-controller="GtfsFeeds" asp-action="Index"><i class="bi bi-file-earmark-zip"></i> Feeds GTFS</a></li>
                             @if (isAdmin)
                             {

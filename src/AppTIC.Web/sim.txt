@@ -1,0 +1,285 @@
+﻿Para manter o estado dos 10 cais em memória e atualizar as alocações de forma incremental (sem reescrever o histórico de quem já atracou e aceitando novos pedidos em tempo real), a melhor abordagem no .NET 10 é combinar um Singleton thread-safe (com locks de leitura/escrita ou coleções concorrentes) com o resolvedor do OR-Tools.
+1. Modelo de Estado e Repositório em Memória
+O repositório armazena os autocarros ativos e as suas alocações. Sempre que um autocarro chega, tenta-se alocar incrementalmente mantendo intocados os que já têm cais atribuído ou estão atracados.
+
+
+
+
+
+
+C#
+namespace TerminalRodoviario.Api;
+
+public enum EstadoAutocarro
+{
+   Agendado,
+   Atracado,
+   Concluido
+}
+
+public record RegistoCais(
+   string AutocarroId,
+   ZonaCais Zona,
+   int ChegadaMinutos,
+   int PartidaMinutos,
+   int? CaisAlocado,
+   EstadoAutocarro Estado
+);
+
+public interface ITerminalStateStore
+{
+   IReadOnlyList<RegistoCais> ObterAtivos();
+   void AtualizarAlocacoes(IEnumerable<AlocacaoResposta> alocacoes);
+   void RegistarChegada(string id, ZonaCais zona, int chegadaMinutos, int partidaMinutos);
+   bool MarcarAtracado(string id);
+   bool MarcarPartida(string id);
+}
+
+public class InMemoryTerminalStateStore : ITerminalStateStore
+{
+   // ReaderWriterLockSlim garante múltiplas leituras em paralelo e escrita exclusiva
+   private readonly ReaderWriterLockSlim _lock = new();
+   private readonly Dictionary<string, RegistoCais> _autocarros = new();
+
+   public IReadOnlyList<RegistoCais> ObterAtivos()
+   {
+       _lock.EnterReadLock();
+       try
+       {
+           return _autocarros.Values
+               .Where(a => a.Estado != EstadoAutocarro.Concluido)
+               .ToList();
+       }
+       finally
+       {
+           _lock.ExitReadLock();
+       }
+   }
+
+   public void RegistarChegada(string id, ZonaCais zona, int chegadaMinutos, int partidaMinutos)
+   {
+       _lock.EnterWriteLock();
+       try
+       {
+           _autocarros[id] = new RegistoCais(
+               id,
+               zona,
+               chegadaMinutos,
+               partidaMinutos,
+               CaisAlocado: null,
+               EstadoAutocarro.Agendado
+           );
+       }
+       finally
+       {
+           _lock.ExitWriteLock();
+       }
+   }
+
+   public void AtualizarAlocacoes(IEnumerable<AlocacaoResposta> alocacoes)
+   {
+       _lock.EnterWriteLock();
+       try
+       {
+           foreach (var aloc in alocacoes)
+           {
+               if (_autocarros.TryGetValue(aloc.AutocarroId, out var registo))
+               {
+                   _autocarros[aloc.AutocarroId] = registo with { CaisAlocado = aloc.Cais };
+               }
+           }
+       }
+       finally
+       {
+           _lock.ExitWriteLock();
+       }
+   }
+
+   public bool MarcarAtracado(string id)
+   {
+       _lock.EnterWriteLock();
+       try
+       {
+           if (_autocarros.TryGetValue(id, out var r) && r.CaisAlocado.HasValue)
+           {
+               _autocarros[id] = r with { Estado = EstadoAutocarro.Atracado };
+               return true;
+           }
+           return false;
+       }
+       finally
+       {
+           _lock.ExitWriteLock();
+       }
+   }
+
+   public bool MarcarPartida(string id)
+   {
+       _lock.EnterWriteLock();
+       try
+       {
+           if (_autocarros.TryGetValue(id, out var r))
+           {
+               _autocarros[id] = r with { Estado = EstadoAutocarro.Concluido };
+               return true;
+           }
+           return false;
+       }
+       finally
+       {
+           _lock.ExitWriteLock();
+       }
+   }
+}
+
+2. Orquestrador de Otimização Incremental
+O orquestrador recolhe os veículos ativos do Singleton, transforma os já atracados ou confirmados em restrições fixas (CaisFixo) para o OR-Tools e recalcula os restantes.
+
+
+
+
+
+
+C#
+public class TerminalManager(ITerminalStateStore store, ICaisService solver)
+{
+   public (bool Sucesso, List<AlocacaoResposta>? Alocacoes, string? Erro) ProcessarNovaEntrada(
+       string id, 
+       ZonaCais zona, 
+       int chegadaMinutos, 
+       int partidaMinutos)
+   {
+       // 1. Regista o novo autocarro no estado
+       store.RegistarChegada(id, zona, chegadaMinutos, partidaMinutos);
+
+       // 2. Extrai todo o tráfego ativo
+       var ativos = store.ObterAtivos();
+
+       // 3. Converte para DTO do solver. 
+       // Se já está atracado, fixa o cais obrigatoriamente.
+       var dtosParaSolver = ativos.Select(a => new AutocarroDto(
+           a.AutocarroId,
+           a.Zona,
+           a.ChegadaMinutos,
+           a.PartidaMinutos,
+           CaisFixo: a.Estado == EstadoAutocarro.Atracado ? a.CaisAlocado : null
+       )).ToList();
+
+       // 4. Executa o OR-Tools CP-SAT
+       var resultado = solver.AlocarCais(dtosParaSolver);
+
+       if (resultado is null)
+       {
+           return (false, null, "Inviável alocar cais para a chegada solicitada sem violar janelas temporais.");
+       }
+
+       // 5. Atualiza o estado em memória com a nova grelha de alocações
+       store.AtualizarAlocacoes(resultado);
+
+       return (true, resultado, null);
+   }
+}
+
+3. Configuração dos Endpoints (Program.cs)
+Registe a store como Singleton e o orquestrador/serviço como Scoped:
+
+
+
+
+
+
+C#
+using System.Text.Json.Serialization;
+using TerminalRodoviario.Api;
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+   options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+});
+
+// Singleton: vive durante todo o ciclo da aplicação com o estado dos 10 cais
+builder.Services.AddSingleton<ITerminalStateStore, InMemoryTerminalStateStore>();
+
+// Scoped: instanciados a cada pedido HTTP
+builder.Services.AddScoped<ICaisService, CaisService>();
+builder.Services.AddScoped<TerminalManager>();
+
+var app = builder.Build();
+var terminalApi = app.MapGroup("/api/terminal");
+
+// 1. Obter estado atual de todos os cais
+terminalApi.MapGet("/estado", (ITerminalStateStore store) =>
+{
+   return Results.Ok(store.ObterAtivos());
+});
+
+// 2. Registar chegada e recalcular em tempo real
+terminalApi.MapPost("/chegada", (
+   NovaChegadaRequest req, 
+   TerminalManager manager) =>
+{
+   if (req.ChegadaMinutos >= req.PartidaMinutos)
+   {
+       return Results.BadRequest(new { Mensagem = "Hora de partida tem de ser superior à de chegada." });
+   }
+
+   var (sucesso, alocacoes, erro) = manager.ProcessarNovaEntrada(
+       req.Id, 
+       req.Zona, 
+       req.ChegadaMinutos, 
+       req.PartidaMinutos
+   );
+
+   if (!sucesso)
+   {
+       return Results.Conflict(new { Mensagem = erro });
+   }
+
+   var atribuicao = alocacoes!.First(a => a.AutocarroId == req.Id);
+   return Results.Ok(new
+   {
+       Mensagem = "Autocarro integrado com sucesso.",
+       CaisAtribuido = atribuicao.Cais,
+       AlocacoesAtivas = alocacoes.OrderBy(a => a.Cais)
+   });
+});
+
+// 3. Confirmar que o autocarro encostou fisicamente ao cais
+terminalApi.MapPost("/atracar/{id}", (string id, ITerminalStateStore store) =>
+{
+   var ok = store.MarcarAtracado(id);
+   return ok 
+       ? Results.Ok(new { Mensagem = $"Autocarro {id} marcado como atracado (cais travado)." })
+       : Results.NotFound(new { Mensagem = "Autocarro não encontrado ou sem cais atribuído." });
+});
+
+// 4. Libertar cais após saída do autocarro
+terminalApi.MapPost("/partida/{id}", (string id, ITerminalStateStore store) =>
+{
+   var ok = store.MarcarPartida(id);
+   return ok 
+       ? Results.Ok(new { Mensagem = $"Autocarro {id} concluiu viagem e libertou o cais." })
+       : Results.NotFound(new { Mensagem = "Autocarro não encontrado." });
+});
+
+app.Run();
+
+public record NovaChegadaRequest(
+   string Id, 
+   ZonaCais Zona, 
+   int ChegadaMinutos, 
+   int PartidaMinutos
+);
+
+Como o Fluxo Opera na Prática
+1. Chegada do Autocarro (POST /api/terminal/chegada):
+   * O autocarro entra na lista com o estado Agendado.
+   * O CP-SAT corre em menos de 50ms considerando os cais já bloqueados.
+   * Se houver vaga na sua zona (Lisboa: 1-4, Fora: 5-8, Norte: 9-10), recebe o cais ideal e o estado geral é persistido.
+2. Entrada Física no Cais (POST /api/terminal/atracar/{id}):
+   * O estado passa para Atracado.
+   * Nas próximas invocações do otimizador, esse veículo passa com CaisFixo = X. O OR-Tools não tentará reorganizá-lo mesmo que surja um autocarro com atraso.
+3. Fim de Operação (POST /api/terminal/partida/{id}):
+   * O estado passa a Concluido, libertando o intervalo para futuras reservas.

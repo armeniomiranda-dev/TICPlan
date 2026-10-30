@@ -1,7 +1,9 @@
 using AppTIC.Web.Data;
 using AppTIC.Web.Infrastructure;
 using AppTIC.Web.Models.Domain;
+using AppTIC.Web.Models.Terminal;
 using AppTIC.Web.Services;
+using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http.Features;
@@ -11,6 +13,7 @@ using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.EntityFrameworkCore;
 using System.Globalization;
 using System.Text.Encodings.Web;
+using System.Text.Json.Serialization;
 using System.Text.Unicode;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -67,6 +70,12 @@ builder.Services.AddScoped<GtfsFeedService>();
 builder.Services.AddScoped<GtfsDbLoader>();
 builder.Services.AddScoped<GtfsImportService>();
 builder.Services.AddScoped<OcupacaoTerminal>();
+builder.Services.AddScoped<SimulacaoService>();
+builder.Services.AddSingleton<ICaisService, CaisService>();
+builder.Services.AddSingleton<ITerminalStateStore, InMemoryTerminalStateStore>();
+builder.Services.AddAntiforgery(options => options.HeaderName = "RequestVerificationToken");
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(allowIntegerValues: false)));
 
 // Todas as páginas exigem sessão iniciada, exceto as marcadas com [AllowAnonymous].
 builder.Services.AddControllersWithViews(o =>
@@ -104,6 +113,72 @@ app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}")
     .WithStaticAssets();
+
+var terminalApi = app.MapGroup("/api/terminal").RequireAuthorization();
+terminalApi.AddEndpointFilter(async (context, next) =>
+{
+    if (!HttpMethods.IsGet(context.HttpContext.Request.Method))
+    {
+        var antiforgery = context.HttpContext.RequestServices.GetRequiredService<IAntiforgery>();
+        try
+        {
+            await antiforgery.ValidateRequestAsync(context.HttpContext);
+        }
+        catch (AntiforgeryValidationException)
+        {
+            return Results.BadRequest(new { Mensagem = "Token antifalsificação inválido ou em falta." });
+        }
+    }
+    return await next(context);
+});
+
+terminalApi.MapGet("/antiforgery", (HttpContext context, IAntiforgery antiforgery) =>
+    Results.Ok(new { Token = antiforgery.GetAndStoreTokens(context).RequestToken }));
+
+terminalApi.MapGet("/estado", (ITerminalStateStore store) => Results.Ok(store.ObterAtivos()));
+
+terminalApi.MapPost("/alocar-preview", (IReadOnlyList<AutocarroDto> pedidos, ICaisService solver) =>
+{
+    if (pedidos.Count == 0)
+        return Results.Ok(Array.Empty<AlocacaoResposta>());
+
+    if (pedidos.Any(p => string.IsNullOrWhiteSpace(p.AutocarroId) || !Enum.IsDefined(p.Zona) || p.ChegadaMinutos >= p.PartidaMinutos))
+        return Results.BadRequest(new { Mensagem = "Existem pedidos inválidos no preview de alocação." });
+
+    var resultado = solver.AlocarCais(pedidos);
+    return resultado is null
+        ? Results.Conflict(new { Mensagem = "Inviável alocar cais para os pedidos enviados." })
+        : Results.Ok(resultado.OrderBy(a => a.Cais));
+});
+
+terminalApi.MapPost("/chegada", (NovaChegadaRequest pedido, ITerminalStateStore store) =>
+{
+    if (string.IsNullOrWhiteSpace(pedido.Id) || !Enum.IsDefined(pedido.Zona) ||
+        pedido.ChegadaMinutos < 0 || pedido.ChegadaMinutos >= pedido.PartidaMinutos)
+        return Results.BadRequest(new { Mensagem = "Indique um identificador, uma zona válida e um intervalo de minutos válido." });
+
+    var resultado = store.RegistarChegada(pedido);
+    if (!resultado.Sucesso)
+        return Results.Conflict(new { Mensagem = resultado.Erro });
+
+    var atribuicao = resultado.Alocacoes!.First(a => a.AutocarroId == pedido.Id);
+    return Results.Ok(new
+    {
+        Mensagem = "Autocarro integrado com sucesso.",
+        CaisAtribuido = atribuicao.Cais,
+        AlocacoesAtivas = resultado.Alocacoes.OrderBy(a => a.Cais)
+    });
+});
+
+terminalApi.MapPost("/atracar/{id}", (string id, ITerminalStateStore store) =>
+    store.MarcarAtracado(id)
+        ? Results.Ok(new { Mensagem = $"Autocarro {id} marcado como atracado (cais travado)." })
+        : Results.NotFound(new { Mensagem = "Autocarro não encontrado, já atracado ou sem cais atribuído." }));
+
+terminalApi.MapPost("/partida/{id}", (string id, ITerminalStateStore store) =>
+    store.MarcarPartida(id)
+        ? Results.Ok(new { Mensagem = $"Autocarro {id} concluiu viagem e libertou o cais." })
+        : Results.NotFound(new { Mensagem = "Autocarro não encontrado ou já concluído." }));
 
 await DbSeeder.SeedAsync(app.Services, app.Configuration);
 

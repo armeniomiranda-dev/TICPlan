@@ -1,0 +1,88 @@
+@{
+    ViewData["Title"] = "Simulação";
+}
+
+@section Head {
+    <link rel="stylesheet" href="~/css/simulacao.css" asp-append-version="true" />
+}
+
+<div class="simulacao" id="simulacao" data-url="@Url.Action("Dados", "Simulacao")">
+    <div class="sim-header">
+        <div>
+            <h1><i class="bi bi-bus-front"></i> Simulação do terminal</h1>
+            <p>Circulações e horários registados na aplicação · 17 cais · simulação isolada</p>
+        </div>
+        <div class="sim-clock"><span>HORA SIMULADA</span><strong id="sim-clock">00:00:00</strong></div>
+    </div>
+    <div class="sim-notice">
+        Os horários são planeados, não posições em tempo real. Escolha uma zona para cada circulação a simular;
+        os cais são atribuídos apenas nesta página pela regra do primeiro cais livre, não pelo resolvedor operacional.
+        Os cais 11–17 são uma reserva comum simulada, utilizada quando os cais da zona estiverem ocupados.
+        Reiniciar ou fechar não altera a operação nem a base de dados.
+    </div>
+    <div class="sim-controls">
+        <label>Data <input id="sim-date" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" /></label>
+        <button id="sim-load" type="button"><i class="bi bi-arrow-clockwise"></i> Carregar</button>
+        <button id="sim-play" type="button" disabled><i class="bi bi-play-fill"></i> Iniciar</button>
+        <button id="sim-reset" type="button" disabled>Reiniciar</button>
+        <label>Velocidade
+            <select id="sim-speed"><option value="60">1 min/s</option><option value="300" selected>5 min/s</option><option value="900">15 min/s</option></select>
+        </label>
+        <label class="sim-timeline">Hora
+            <input id="sim-time" type="range" min="0" max="86400" value="0" step="60" disabled aria-label="Hora simulada" />
+        </label>
+    </div>
+    <div id="sim-status" class="sim-status" role="status" aria-live="polite">A carregar circulações...</div>
+    <div id="sim-overflow-alert" class="sim-overflow-alert" role="alert" aria-live="assertive" hidden>
+        <strong>Alerta de falta de espaço</strong>
+        <span id="sim-overflow-text"></span>
+    </div>
+    <div class="sim-grid">
+        <section class="sim-panel sim-map">
+            <div class="sim-panel-heading"><h2>Terminal · planta esquemática</h2><span>Lisboa 1–4 · Fora 5–8 · Norte 9–10 · Reserva comum 11–17</span></div>
+            <canvas id="sim-canvas" width="1100" height="500" aria-label="Planta esquemática do terminal: cais 1 a 17 disponíveis para a simulação"></canvas>
+            <div id="sim-summary" class="sim-summary"></div>
+            <div id="sim-inspector" class="sim-inspector" role="status">Selecione um cais no mapa para ver os detalhes.</div>
+            <div id="sim-conflicts" class="sim-conflicts" role="status"></div>
+            
+            <div class="sim-panel-heading"><h2>Despacho OR-Tools</h2><span id="sim-count">0</span></div>
+            <p>Despacho manual para o resolvedor de cais. Conversão: segundos simulados para minutos do dia.</p>
+            <form id="sim-dispatch-form" class="sim-dispatch-form">
+                <label>ID / Matrícula <input id="sim-dispatch-id" type="text" placeholder="BUS-001" /></label>
+                <label>
+                    Zona
+                    <select id="sim-dispatch-zone"><option>Lisboa</option><option>Fora</option><option>Norte</option><option>Outros</option></select>
+                </label>
+                <label>Chegada (min) <input id="sim-dispatch-arrival" type="number" min="0" max="1439" value="600" /></label>
+                <label>Partida (min) <input id="sim-dispatch-departure" type="number" min="1" max="1440" value="620" /></label>
+                <div class="sim-dispatch-actions">
+                    <button id="sim-dispatch-send" type="submit">Despachar</button>
+                    <button id="sim-dispatch-dock" type="button">Marcar atracado</button>
+                    <button id="sim-dispatch-leave" type="button">Marcar partida</button>
+                </div>
+            </form>
+      
+            <div class="sim-panel-heading sim-sub-heading"><h3>Eventos do algoritmo</h3><button id="sim-events-clear" type="button">Limpar</button></div>
+
+        </section>
+        <section class="sim-panel sim-trips">
+            <div class="sim-panel-heading sim-sub-heading"><h3>Painel de cais</h3><span id="sim-bay-count">0</span></div>
+            <div id="sim-bays" class="sim-bays" aria-live="polite"></div>
+            <div id="sim-events" class="sim-events" aria-live="polite"></div>
+            <div class="sim-panel-heading sim-sub-heading"><h3>Circulações do dia</h3></div>
+            <p>Indique a zona para incluir cada circulação. A zona e o cais são hipotéticos.</p>
+            <label class="sim-bulk">
+                Aplicar zona a todas
+                <select id="sim-bulk-zone"><option value="">Sem zona</option><option>Lisboa</option><option>Fora</option><option>Norte</option><option>Outros</option></select>
+                <button id="sim-bulk-apply" type="button" disabled>Aplicar</button>
+            </label>
+            <div id="sim-list" class="sim-list"></div>
+        </section>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/simulacao-planeador.js" asp-append-version="true"></script>
+    <script src="~/js/simulacao-planta.js" asp-append-version="true"></script>
+    <script src="~/js/simulacao.js" asp-append-version="true"></script>
+}

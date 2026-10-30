@@ -1,0 +1,1739 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Terminal Intermodal - Simulador & Digital Twin CCO</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts & Font Awesome Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #0b0f19;
+      color: #e2e8f0;
+      overflow-x: hidden;
+    }
+    .font-mono-code {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    /* Blueprint & Grid Styling */
+    .cad-grid {
+      background-size: 30px 30px;
+      background-image: 
+        linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    }
+    /* Glow utilities */
+    .glow-blue {
+      box-shadow: 0 0 15px rgba(59, 130, 246, 0.35);
+    }
+    .glow-orange {
+      box-shadow: 0 0 15px rgba(249, 115, 22, 0.35);
+    }
+    .glow-purple {
+      box-shadow: 0 0 15px rgba(168, 85, 247, 0.35);
+    }
+    /* Custom scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-[#0b0f19] text-slate-100 antialiased select-none">
+
+  <!-- TOP BAR / CCO HEADER -->
+  <header class="bg-[#0f172a]/90 border-b border-slate-800 backdrop-blur px-5 py-3 sticky top-0 z-40 flex flex-wrap items-center justify-between gap-4">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/20 text-white text-lg">
+        <i class="fa-solid fa-bus-simple"></i>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="font-bold text-lg text-white tracking-tight">Centro de Controlo Operacional (CCO)</h1>
+          <span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">ONLINE</span>
+          <span class="px-2 py-0.5 rounded text-[11px] font-mono-code bg-slate-800 text-slate-300 border border-slate-700">TIC - 28 Cais Totais</span>
+        </div>
+        <p class="text-xs text-slate-400">Digital Twin com Rotunda de Acesso • Entrada Inferior • Saída Central • Cais 1 a 28</p>
+      </div>
+    </div>
+
+    <!-- Quick Stats in Header -->
+    <div class="flex items-center gap-4 text-xs font-mono-code bg-slate-900/80 px-4 py-2 rounded-lg border border-slate-800">
+      <div>
+        <span class="text-slate-400 block text-[10px]">HORA TERMINAL</span>
+        <span id="terminalClock" class="text-white font-bold text-sm">12:00:00</span>
+      </div>
+      <div class="h-6 w-px bg-slate-700"></div>
+      <div>
+        <span class="text-slate-400 block text-[10px]">TOTAL PROCESSADOS</span>
+        <span id="statProcessed" class="text-emerald-400 font-bold text-sm">0</span>
+      </div>
+      <div class="h-6 w-px bg-slate-700"></div>
+      <div>
+        <span class="text-slate-400 block text-[10px]">REJEITADOS (SEM LUGAR)</span>
+        <span id="statRejected" class="text-rose-400 font-bold text-sm">0</span>
+      </div>
+    </div>
+
+    <!-- Simulation Controls -->
+    <div class="flex items-center gap-2 bg-slate-900/90 p-1.5 rounded-xl border border-slate-800">
+      <button id="btnPlayPause" class="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs flex items-center gap-1.5 transition">
+        <i class="fa-solid fa-pause" id="playPauseIcon"></i>
+        <span id="playPauseText">Pausar</span>
+      </button>
+      <div class="flex items-center bg-slate-800 rounded-lg p-0.5 text-xs font-mono-code">
+        <button class="speed-btn px-2.5 py-1 rounded text-slate-300 hover:text-white" data-speed="1">1x</button>
+        <button class="speed-btn px-2.5 py-1 rounded bg-blue-500 text-white font-bold" data-speed="2">2x</button>
+        <button class="speed-btn px-2.5 py-1 rounded text-slate-300 hover:text-white" data-speed="4">4x</button>
+      </div>
+      <button id="btnReset" title="Reiniciar Simulação" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs transition">
+        <i class="fa-solid fa-arrows-rotate"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN INTERFACE -->
+  <main class="flex-1 p-4 grid grid-cols-1 xl:grid-cols-12 gap-4">
+
+    <!-- LEFT & CENTER: MAP / DIGITAL TWIN CANVAS (8 Cols) -->
+    <section class="xl:col-span-8 flex flex-col gap-3">
+      <!-- Terminal Canvas Container -->
+      <div class="relative bg-[#0d1322] border border-slate-800 rounded-2xl overflow-hidden shadow-2xl flex-1 flex flex-col min-h-[500px]">
+        <!-- Top canvas toolbar -->
+        <div class="px-4 py-2.5 bg-slate-900/90 border-b border-slate-800/80 flex items-center justify-between text-xs">
+          <div class="flex items-center gap-4">
+            <span class="text-slate-300 font-semibold flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              Planta Digital TIC — Rotunda + Cais Inferiores (1-10) + Cais Superiores (11-28)
+            </span>
+            <div class="hidden sm:flex items-center gap-3 text-[11px]">
+              <span class="flex items-center gap-1 text-blue-400"><span class="w-2.5 h-2.5 rounded bg-blue-500 inline-block"></span> Lisboa (1-4)</span>
+              <span class="flex items-center gap-1 text-amber-400"><span class="w-2.5 h-2.5 rounded bg-amber-500 inline-block"></span> Fora (5-8)</span>
+              <span class="flex items-center gap-1 text-purple-400"><span class="w-2.5 h-2.5 rounded bg-purple-500 inline-block"></span> Norte (9-10)</span>
+              <span class="flex items-center gap-1 text-emerald-400"><span class="w-2.5 h-2.5 rounded bg-emerald-500 inline-block"></span> Cais Sup. (11-28)</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 text-slate-400 font-mono-code text-[11px]">
+            <span>Entrada: Rotunda Inferior • Saída: Corredor do Meio</span>
+          </div>
+        </div>
+
+        <!-- Canvas Area -->
+        <div class="relative w-full flex-1 cad-grid flex items-center justify-center p-2 overflow-hidden" id="canvasWrapper">
+          <canvas id="terminalCanvas" class="block w-full h-full cursor-crosshair rounded-xl"></canvas>
+
+          <!-- Toast Banner for Overflow / No Space Alert -->
+          <div id="alertBanner" class="hidden absolute top-4 left-1/2 -translate-x-1/2 bg-rose-950/95 border-2 border-rose-500 rounded-xl px-4 py-2.5 shadow-2xl flex items-center gap-3 backdrop-blur-md z-30 transition-all duration-300 animate-bounce">
+            <div class="w-8 h-8 rounded-lg bg-rose-600 flex items-center justify-center text-white text-base">
+              <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <div>
+              <div class="font-bold text-xs text-white tracking-wide flex items-center gap-2">
+                <span>ALERTA DE FALTA DE ESPAÇO</span>
+                <span class="px-1.5 py-0.2 bg-rose-500/40 text-rose-300 rounded font-mono-code text-[10px]">LOTADO</span>
+              </div>
+              <p id="alertBannerText" class="text-[11px] text-rose-200 font-medium">Zona sem cais disponível. Autocarro desviado para saída.</p>
+            </div>
+          </div>
+
+          <!-- Floating Tooltip for Clicked Bus / Bay -->
+          <div id="inspectorCard" class="hidden absolute top-4 right-4 bg-slate-900/95 border border-slate-700/80 rounded-xl p-3 shadow-2xl w-64 backdrop-blur-md text-xs pointer-events-auto transition-all">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-2 mb-2">
+              <span id="inspectorTitle" class="font-bold text-white flex items-center gap-1.5">
+                <i class="fa-solid fa-circle-info text-blue-400"></i> Detalhes
+              </span>
+              <button id="closeInspector" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div id="inspectorBody" class="space-y-1.5 text-slate-300">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Status Legend & Bay Quick Bar -->
+        <div class="px-4 py-2 bg-slate-950/80 border-t border-slate-800/80 flex flex-wrap items-center justify-between text-xs gap-3">
+          <div class="flex items-center gap-4 text-slate-400 text-[11px]">
+            <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-500"></span> Livre</span>
+            <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span> A Ingressar</span>
+            <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-blue-500"></span> Parado em Cais</span>
+            <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-rose-500"></span> Ocupado</span>
+          </div>
+          <div class="text-[11px] text-slate-400">
+            Cais 1 a 10 (Plataforma Inferior) • Cais 11 a 28 (Plataforma Superior em Espinha)
+          </div>
+        </div>
+      </div>
+
+      <!-- Occupancy & Capacity Strip -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <!-- Lisboa -->
+        <div class="bg-slate-900/80 border border-blue-500/30 rounded-xl p-3 relative overflow-hidden">
+          <div class="flex justify-between items-center mb-1">
+            <span class="text-xs font-semibold text-blue-400 flex items-center gap-1.5">
+              <i class="fa-solid fa-map-pin"></i> Lisboa (1-4)
+            </span>
+            <span id="occLisboaText" class="font-mono-code font-bold text-xs text-white">0 / 4</span>
+          </div>
+          <div class="w-full bg-slate-800 rounded-full h-1.5 mb-2 overflow-hidden">
+            <div id="occLisboaBar" class="bg-blue-500 h-1.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+          </div>
+          <div class="flex justify-between text-[11px] font-mono-code text-slate-400">
+            <span>Cais 1 a 4</span>
+            <span id="occLisboaPct">0%</span>
+          </div>
+        </div>
+
+        <!-- Fora -->
+        <div class="bg-slate-900/80 border border-amber-500/30 rounded-xl p-3 relative overflow-hidden">
+          <div class="flex justify-between items-center mb-1">
+            <span class="text-xs font-semibold text-amber-400 flex items-center gap-1.5">
+              <i class="fa-solid fa-compass"></i> Fora (5-8)
+            </span>
+            <span id="occForaText" class="font-mono-code font-bold text-xs text-white">0 / 4</span>
+          </div>
+          <div class="w-full bg-slate-800 rounded-full h-1.5 mb-2 overflow-hidden">
+            <div id="occForaBar" class="bg-amber-500 h-1.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+          </div>
+          <div class="flex justify-between text-[11px] font-mono-code text-slate-400">
+            <span>Cais 5 a 8</span>
+            <span id="occForaPct">0%</span>
+          </div>
+        </div>
+
+        <!-- Norte -->
+        <div class="bg-slate-900/80 border border-purple-500/30 rounded-xl p-3 relative overflow-hidden">
+          <div class="flex justify-between items-center mb-1">
+            <span class="text-xs font-semibold text-purple-400 flex items-center gap-1.5">
+              <i class="fa-solid fa-route"></i> Norte (9-10)
+            </span>
+            <span id="occNorteText" class="font-mono-code font-bold text-xs text-white">0 / 2</span>
+          </div>
+          <div class="w-full bg-slate-800 rounded-full h-1.5 mb-2 overflow-hidden">
+            <div id="occNorteBar" class="bg-purple-500 h-1.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+          </div>
+          <div class="flex justify-between text-[11px] font-mono-code text-slate-400">
+            <span>Cais 9, 10</span>
+            <span id="occNortePct">0%</span>
+          </div>
+        </div>
+
+        <!-- Superior / Internacional / Reforço -->
+        <div class="bg-slate-900/80 border border-emerald-500/30 rounded-xl p-3 relative overflow-hidden">
+          <div class="flex justify-between items-center mb-1">
+            <span class="text-xs font-semibold text-emerald-400 flex items-center gap-1.5">
+              <i class="fa-solid fa-layer-group"></i> Superior (11-28)
+            </span>
+            <span id="occSuperiorText" class="font-mono-code font-bold text-xs text-white">0 / 18</span>
+          </div>
+          <div class="w-full bg-slate-800 rounded-full h-1.5 mb-2 overflow-hidden">
+            <div id="occSuperiorBar" class="bg-emerald-500 h-1.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+          </div>
+          <div class="flex justify-between text-[11px] font-mono-code text-slate-400">
+            <span>18 Cais Espinha</span>
+            <span id="occSuperiorPct">0%</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT: CONTROL TOWER, INJECTION & PIS SCREEN (4 Cols) -->
+    <section class="xl:col-span-4 flex flex-col gap-3">
+      
+      <!-- INJECTION & DISPATCH PANEL -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-3">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-cyan-400"></span>
+            <h2 class="font-bold text-sm text-white">Despacho de Autocarro</h2>
+          </div>
+          <div class="flex items-center gap-2">
+            <label class="text-[11px] text-slate-400 cursor-pointer flex items-center gap-1.5">
+              <input type="checkbox" id="autoTrafficToggle" checked class="rounded bg-slate-800 border-slate-700 text-blue-600 focus:ring-0">
+              Tráfego Automático
+            </label>
+          </div>
+        </div>
+
+        <form id="dispatchForm" class="space-y-3">
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-400 mb-1">ID / Matrícula</label>
+              <input type="text" id="busIdInput" value="EXP-802" class="w-full bg-slate-800/90 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono-code focus:outline-none focus:border-blue-500">
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-400 mb-1">Operadora</label>
+              <select id="operatorInput" class="w-full bg-slate-800/90 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500">
+                <option value="Rede Expressos">Rede Expressos</option>
+                <option value="FlixBus">FlixBus</option>
+                <option value="Rodoviária do Tejo">Rodoviária do Tejo</option>
+                <option value="Renex">Renex</option>
+                <option value="Gipsyy">Gipsyy</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-400 mb-1">Zona Destino</label>
+              <select id="zoneInput" class="w-full bg-slate-800/90 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-medium focus:outline-none focus:border-blue-500">
+                <option value="Lisboa">Lisboa (Cais 1-4)</option>
+                <option value="Fora">Fora (Cais 5-8)</option>
+                <option value="Norte">Norte (Cais 9-10)</option>
+                <option value="Superior">Cais Superiores (11-28)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-400 mb-1">Estadia (Segundos)</label>
+              <input type="number" id="dwellInput" value="12" min="5" max="60" class="w-full bg-slate-800/90 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono-code focus:outline-none focus:border-blue-500">
+            </div>
+          </div>
+
+          <div class="flex gap-2">
+            <button type="submit" class="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold py-2 px-3 rounded-lg text-xs flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25 transition">
+              <i class="fa-solid fa-paper-plane"></i>
+              Injetar Autocarro
+            </button>
+            <button type="button" id="btnFillZone" title="Simular Sobrelotação" class="px-2.5 py-2 bg-rose-900/40 hover:bg-rose-800/70 border border-rose-600/50 text-rose-300 rounded-lg text-xs font-semibold flex items-center gap-1 transition">
+              <i class="fa-solid fa-ban"></i>
+              Lotar Zona
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- TELEINDICATOR (PIS) ARRIVALS/DEPARTURES BOARD -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 shadow-xl flex-1 flex flex-col">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-2.5 mb-2.5">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
+            <h2 class="font-bold text-sm text-white">Painel de Cais & Teleindicador</h2>
+          </div>
+          <span class="text-[10px] font-mono-code text-slate-400">PIS v2.4</span>
+        </div>
+
+        <!-- Table of Cais Status -->
+        <div class="overflow-y-auto max-h-[380px] flex-1 pr-1 space-y-1.5" id="caisTableContainer">
+          <!-- Populated by JavaScript -->
+        </div>
+      </div>
+
+      <!-- REAL-TIME LOGS / SOLVER EVENTS -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3 shadow-xl h-44 flex flex-col">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-2 mb-2 text-xs">
+          <span class="font-semibold text-slate-300 flex items-center gap-1.5">
+            <i class="fa-solid fa-terminal text-emerald-400"></i> Eventos do Algoritmo OR-Tools
+          </span>
+          <button id="clearLogs" class="text-[10px] text-slate-400 hover:text-slate-200">Limpar</button>
+        </div>
+        <div id="eventLogs" class="flex-1 overflow-y-auto font-mono-code text-[11px] space-y-1 text-slate-400 pr-1">
+          <div class="text-emerald-400">[00:00:00] Modelo carregado: 10 cais chevron particionados em 3 zonas.</div>
+          <div class="text-blue-400">[00:00:00] Resolvedor CP-SAT pronto para alocações sem colisão temporal.</div>
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- JAVASCRIPT: SIMULATION ENGINE, GEOMETRY, & SOLVER LOGIC -->
+  <script>
+    // --- CONFIGURATION & DOMAIN DEFINITION ---
+    // All bays numbered 1 to 28:
+    // 1-4: Lisboa, 5-8: Fora, 9-10: Norte, 11-28: Superior (18 cais diagonais a 42°)
+    const ZONAS = {
+      Lisboa:   { id: "Lisboa",   nome: "Lisboa",   cais: [1, 2, 3, 4], cor: "#3b82f6", corClara: "rgba(59, 130, 246, 0.25)" },
+      Fora:     { id: "Fora",     nome: "Fora",     cais: [5, 6, 7, 8], cor: "#f59e0b", corClara: "rgba(245, 158, 11, 0.25)" },
+      Norte:    { id: "Norte",    nome: "Norte",    cais: [9, 10],      cor: "#a855f7", corClara: "rgba(168, 85, 247, 0.25)" },
+      Superior: { 
+        id: "Superior", 
+        nome: "Superior", 
+        cais: [11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28], 
+        cor: "#10b981", 
+        corClara: "rgba(16, 185, 129, 0.25)" 
+      }
+    };
+
+    // 28 Cais Data Array
+    const CAIS_DATA = [];
+    for (let i = 1; i <= 4; i++) CAIS_DATA.push({ id: i, zona: "Lisboa", grupo: "Inferior" });
+    for (let i = 5; i <= 8; i++) CAIS_DATA.push({ id: i, zona: "Fora", grupo: "Inferior" });
+    for (let i = 9; i <= 10; i++) CAIS_DATA.push({ id: i, zona: "Norte", grupo: "Inferior" });
+    for (let i = 11; i <= 28; i++) CAIS_DATA.push({ id: i, zona: "Superior", grupo: "Superior" });
+
+    // State of each Bay
+    const caisState = {};
+    CAIS_DATA.forEach(c => {
+      caisState[c.id] = {
+        id: c.id,
+        zona: c.zona,
+        grupo: c.grupo,
+        status: "Livre",
+        currentBus: null,
+        reservadoPara: null,
+        historicoContador: 0
+      };
+    });
+
+    // Global Simulation State
+    const sim = {
+      running: true,
+      speed: 2,
+      timeSeconds: 0,
+      processedCount: 0,
+      rejectedCount: 0,
+      autoTraffic: true,
+      lastSpawnTime: 0,
+      buses: [],
+      selectedEntity: null
+    };
+
+    // Operators list
+    const OPERATORS = [
+      { name: "Rede Expressos", color: "#ef4444" },
+      { name: "FlixBus",        color: "#84cc16" },
+      { name: "Renex",          color: "#06b6d4" },
+      { name: "Rodoviária Tejo",color: "#f59e0b" },
+      { name: "Gipsyy",         color: "#ec4899" }
+    ];
+
+    // Canvas Context
+    const canvas = document.getElementById("terminalCanvas");
+    const ctx = canvas.getContext("2d");
+    let canvasWidth = 1100;
+    let canvasHeight = 620;
+
+    function resizeCanvas() {
+      const wrapper = document.getElementById("canvasWrapper");
+      const rect = wrapper.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      
+      canvasWidth = Math.max(900, rect.width - 16);
+      canvasHeight = Math.max(540, rect.height - 16);
+
+      canvas.width = canvasWidth * dpr;
+      canvas.height = canvasHeight * dpr;
+      canvas.style.width = `${canvasWidth}px`;
+      canvas.style.height = `${canvasHeight}px`;
+
+      ctx.scale(dpr, dpr);
+      computeGeometry();
+    }
+
+    let geom = {};
+
+    function computeGeometry() {
+      const w = canvasWidth;
+      const h = canvasHeight;
+
+      // CENTRAL EXIT CORRIDOR (Corredor de saída fica rigorosamente no meio)
+      const centralCorridorY = h * 0.50;
+      const exitPoint = { x: w - 20, y: centralCorridorY };
+
+      // ROUNDABOUT / ROTUNDA (Left Side) articulando entrada inferior e saída central
+      const roundabout = {
+        cx: w * 0.13,
+        cy: centralCorridorY + 35,
+        rOuter: 42,
+        rInner: 20
+      };
+
+      // ENTRY: A ENTRADA É POR BAIXO (Acesso inferior esquerdo)
+      const entryPoint = {
+        x: w * 0.08,
+        y: h * 0.94
+      };
+
+      // Waypoints inside the roundabout loop
+      const rbEnter = { x: roundabout.cx - 24, y: roundabout.cy + 34 };
+      const rbApex  = { x: roundabout.cx - 36, y: roundabout.cy - 12 };
+      const rbExit  = { x: roundabout.cx + 28, y: roundabout.cy - 18 };
+
+      // 1. CAIS 1 A 10 (INFERIORES) - MAIS JUNTOS DO CORREDOR CENTRAL & RODADOS CONFORME A IMAGEM
+      // Na imagem real (image_32c55f e image_32c4e0), os autocarros estão estacionados em dente de serra
+      // inclinados a ~12° virados para a direita/cima, contíguos à pista central de manobra
+      const baysLower = [];
+      const bayStartX = w * 0.27;
+      const bayEndX = w * 0.94;
+      const bayStep = (bayEndX - bayStartX) / 9;
+      // Posição Y substancialmente mais próxima do meio (centralCorridorY + 54 em vez de 0.82*h)
+      const bayLowerY = centralCorridorY + 55;
+      const bayLowerAngle = -0.21; // ~12° de inclinação exata conforme a imagem
+
+      for (let i = 0; i < 10; i++) {
+        const id = i + 1;
+        const bx = bayStartX + i * bayStep;
+        baysLower.push({
+          id: id,
+          x: bx,
+          y: bayLowerY,
+          angle: bayLowerAngle,
+          length: 54,
+          width: 19,
+          zona: CAIS_DATA[i].zona,
+          grupo: "Inferior"
+        });
+      }
+
+      // 2. CAIS 11 A 28 (SUPERIORES) - TAMBÉM MAIS JUNTOS DO CORREDOR CENTRAL
+      const baysUpper = [];
+      const numUpper = 18;
+      const topStartX = w * 0.30;
+      const topEndX = w * 0.94;
+      const topSpacing = (topEndX - topStartX) / (numUpper - 1);
+      const bayUpperAngle = Math.PI / 4 + 0.05; // ~48° dente de serra em espinha
+
+      for (let i = 0; i < numUpper; i++) {
+        const id = 11 + i;
+        const bx = topStartX + i * topSpacing;
+        // Posição Y compactada para articular diretamente com o corredor do meio
+        const by = (centralCorridorY - 80) - (i * 2.2);
+        baysUpper.push({
+          id: id,
+          x: bx,
+          y: by,
+          angle: bayUpperAngle,
+          length: 50,
+          width: 18,
+          zona: "Superior",
+          grupo: "Superior"
+        });
+      }
+
+      geom = {
+        w, h,
+        roundabout,
+        entryPoint,
+        rbEnter,
+        rbApex,
+        rbExit,
+        centralCorridorY,
+        exitPoint,
+        baysLower,
+        baysUpper,
+        allBays: [...baysLower, ...baysUpper]
+      };
+    }
+
+    window.addEventListener("resize", resizeCanvas);
+
+    // --- CAD VECTOR BUS DRAWING FUNCTION (Strictly matching image_32c55f & image_32c53d) ---
+    function drawCadBusVector(ctx, length, width, operatorColor, isParked, showDetails = true) {
+      const l = length;
+      const w = width;
+      const halfL = l / 2;
+      const halfW = w / 2;
+
+      ctx.save();
+
+      // Drop shadow
+      ctx.fillStyle = "rgba(0, 0, 0, 0.45)";
+      ctx.beginPath();
+      roundRect(ctx, -halfL + 2, -halfW + 3, l, w, 4);
+      ctx.fill();
+
+      // Outer Coach Shell (Body in clean CAD dark tone with light trim)
+      ctx.fillStyle = "#1e293b";
+      ctx.strokeStyle = "#cbd5e1";
+      ctx.lineWidth = 1.3;
+      ctx.beginPath();
+      ctx.moveTo(-halfL + 3, -halfW);
+      ctx.lineTo(halfL - 5, -halfW);
+      ctx.quadraticCurveTo(halfL + 2, -halfW + 2, halfL + 3, 0);
+      ctx.quadraticCurveTo(halfL + 2, halfW - 2, halfL - 5, halfW);
+      ctx.lineTo(-halfL + 3, halfW);
+      ctx.quadraticCurveTo(-halfL, halfW, -halfL, halfW - 3);
+      ctx.lineTo(-halfL, -halfW + 3);
+      ctx.quadraticCurveTo(-halfL, -halfW, -halfL + 3, -halfW);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Wing Mirrors (Espelhos retrovisores exteriores salientes frontais)
+      ctx.strokeStyle = "#94a3b8";
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(halfL - 8, -halfW);
+      ctx.lineTo(halfL - 4, -halfW - 3.5);
+      ctx.lineTo(halfL - 1, -halfW - 3.5);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(halfL - 8, halfW);
+      ctx.lineTo(halfL - 4, halfW + 3.5);
+      ctx.lineTo(halfL - 1, halfW + 3.5);
+      ctx.stroke();
+
+      // Front Windshield Curve
+      ctx.fillStyle = "rgba(56, 189, 248, 0.4)";
+      ctx.strokeStyle = "#38bdf8";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(halfL - 8, -halfW + 2);
+      ctx.quadraticCurveTo(halfL - 2, 0, halfL - 8, halfW - 2);
+      ctx.stroke();
+      ctx.fill();
+
+      // Rear Windshield
+      ctx.strokeStyle = "#64748b";
+      ctx.beginPath();
+      ctx.moveTo(-halfL + 4, -halfW + 2);
+      ctx.lineTo(-halfL + 4, halfW - 2);
+      ctx.stroke();
+
+      if (showDetails) {
+        // Roof Longitudinal Cooling Fins / Ribs (Grelhas longitudinais)
+        ctx.strokeStyle = "rgba(148, 163, 184, 0.35)";
+        ctx.lineWidth = 0.9;
+        const ribYOffsets = [-4, -2, 0, 2, 4];
+        ribYOffsets.forEach(yOff => {
+          ctx.beginPath();
+          ctx.moveTo(-halfL + 8, yOff);
+          ctx.lineTo(halfL - 12, yOff);
+          ctx.stroke();
+        });
+
+        // Center Roof AC Pod with Circular Hatch (Alçapão / AC Central)
+        ctx.fillStyle = "#334155";
+        ctx.strokeStyle = "#94a3b8";
+        ctx.lineWidth = 1;
+        ctx.fillRect(-6, -4, 12, 8);
+        ctx.strokeRect(-6, -4, 12, 8);
+
+        // Circular Hatch
+        ctx.beginPath();
+        ctx.arc(0, 0, 2, 0, Math.PI * 2);
+        ctx.strokeStyle = "#e2e8f0";
+        ctx.stroke();
+      }
+
+      // Front Headlights
+      ctx.fillStyle = isParked ? "#fde047" : "#38bdf8";
+      ctx.beginPath();
+      ctx.arc(halfL - 2, -halfW + 3, 1.2, 0, Math.PI * 2);
+      ctx.arc(halfL - 2, halfW - 3, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Rear Tail Lights
+      ctx.fillStyle = "#ef4444";
+      ctx.beginPath();
+      ctx.arc(-halfL + 1, -halfW + 3, 1.2, 0, Math.PI * 2);
+      ctx.arc(-halfL + 1, halfW - 3, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Operator accent stripe
+      ctx.fillStyle = operatorColor || "#3b82f6";
+      ctx.fillRect(-halfL + 5, -halfW, 4, w);
+
+      ctx.restore();
+    }
+
+    // --- REAL-TIME ALLOCATION ENGINE COM SUPORTE A REJEIÇÃO POR LOTAÇÃO ---
+    function alocarCaisTempoReal(zonaDesejada) {
+      const caisPermitidos = ZONAS[zonaDesejada].cais;
+
+      // 1. Procurar cais livre na respetiva zona
+      for (const caisId of caisPermitidos) {
+        if (caisState[caisId].status === "Livre") {
+          return { caisId: caisId, tempoEspera: 0, modo: "Imediato", transbordo: false };
+        }
+      }
+
+      // Se não houver vaga imediata na zona especificada, rejeita por falta de espaço
+      return {
+        caisId: null,
+        modo: "Rejeitado",
+        motivo: `Zona ${zonaDesejada} sem cais livres`
+      };
+    }
+
+    // Audio Alert Synthesizer via Web Audio API (sem dependência de ficheiros externos)
+    function playWarningSound() {
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = "sawtooth";
+        osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(220, audioCtx.currentTime + 0.3);
+        gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.3);
+      } catch (e) {
+        // Audio not allowed or blocked
+      }
+    }
+
+    function triggerOverflowAlert(busId, zona) {
+      playWarningSound();
+      const banner = document.getElementById("alertBanner");
+      const text = document.getElementById("alertBannerText");
+      text.innerText = `Falta de espaço na Zona ${zona}. O autocarro ${busId} foi desviado para o corredor de saída.`;
+      banner.classList.remove("hidden");
+      
+      clearTimeout(window.bannerTimer);
+      window.bannerTimer = setTimeout(() => {
+        banner.classList.add("hidden");
+      }, 4500);
+    }
+
+    // --- BUS AGENT WITH REJECTION ROUTING & EXACT BAY GEOMETRY ---
+    class BusAgent {
+      constructor(id, operator, zona, dwellSeconds, isRejected = false) {
+        this.id = id;
+        this.operator = operator;
+        this.zona = zona;
+        this.dwellTotal = dwellSeconds;
+        this.dwellRemaining = dwellSeconds;
+        this.targetBayId = null;
+        this.cais = null;
+        this.isRejected = isRejected; // Sinalizado como sem lugar
+
+        this.length = 50;
+        this.width = 17;
+
+        // Início na entrada inferior (A ENTRADA É POR BAIXO)
+        this.x = geom.entryPoint.x;
+        this.y = geom.entryPoint.y;
+        this.angle = -Math.PI / 2 + 0.2;
+        this.speed = 1.7;
+
+        // Kinematic States:
+        // 'ENTER_BOTTOM' -> 'ROUNDABOUT_ENTRY' -> 'ROUNDABOUT_LOOP' -> 'ROUNDABOUT_EXIT' ->
+        // [Se Rejeitado]: 'REJECTED_TO_CORRIDOR' -> 'EXIT_CENTRAL_CORRIDOR'
+        // [Se Normal]: 'NAVIGATE_TO_BAY' -> 'ALIGN_PARK' -> 'PARKED' -> 'PULLOUT_TO_CORRIDOR' -> 'EXIT_CENTRAL_CORRIDOR' -> 'DONE'
+        this.state = 'ENTER_BOTTOM';
+        this.passengers = Math.floor(Math.random() * 34) + 14;
+      }
+
+      update(dt) {
+        if (this.state === 'DONE') return;
+        const effectiveSpeed = this.speed * sim.speed;
+
+        switch (this.state) {
+          case 'ENTER_BOTTOM': {
+            // Sobe da entrada inferior até à rotunda
+            const tx = geom.rbEnter.x;
+            const ty = geom.rbEnter.y;
+            const dx = tx - this.x;
+            const dy = ty - this.y;
+            const dist = Math.hypot(dx, dy);
+
+            this.angle = lerpAngle(this.angle, Math.atan2(dy, dx), 0.08);
+            this.x += Math.cos(this.angle) * effectiveSpeed;
+            this.y += Math.sin(this.angle) * effectiveSpeed;
+
+            if (dist < 14) this.state = 'ROUNDABOUT_ENTRY';
+            break;
+          }
+
+          case 'ROUNDABOUT_ENTRY': {
+            // Contorno do arco da rotunda
+            const tx = geom.rbApex.x;
+            const ty = geom.rbApex.y;
+            const dx = tx - this.x;
+            const dy = ty - this.y;
+            const dist = Math.hypot(dx, dy);
+
+            this.angle = lerpAngle(this.angle, Math.atan2(dy, dx), 0.09);
+            this.x += Math.cos(this.angle) * effectiveSpeed;
+            this.y += Math.sin(this.angle) * effectiveSpeed;
+
+            if (dist < 14) this.state = 'ROUNDABOUT_EXIT';
+            break;
+          }
+
+          case 'ROUNDABOUT_EXIT': {
+            // Sai da rotunda
+            const tx = geom.rbExit.x;
+            const ty = geom.rbExit.y;
+            const dx = tx - this.x;
+            const dy = ty - this.y;
+            const dist = Math.hypot(dx, dy);
+
+            this.angle = lerpAngle(this.angle, Math.atan2(dy, dx), 0.09);
+            this.x += Math.cos(this.angle) * effectiveSpeed;
+            this.y += Math.sin(this.angle) * effectiveSpeed;
+
+            if (dist < 14) {
+              // Se foi rejeitado por falta de espaço, segue direto para o corredor do meio
+              if (this.isRejected) {
+                this.state = 'REJECTED_TO_CORRIDOR';
+              } else {
+                this.state = 'NAVIGATE_TO_BAY';
+              }
+            }
+            break;
+          }
+
+          case 'REJECTED_TO_CORRIDOR': {
+            // Autocarro sem lugar é canalizado imediatamente para o meio da via de saída
+            const tx = geom.w * 0.30;
+            const ty = geom.centralCorridorY;
+            const dx = tx - this.x;
+            const dy = ty - this.y;
+            const dist = Math.hypot(dx, dy);
+
+            this.angle = lerpAngle(this.angle, Math.atan2(dy, dx), 0.09);
+            this.x += Math.cos(this.angle) * (effectiveSpeed * 1.15);
+            this.y += Math.sin(this.angle) * (effectiveSpeed * 1.15);
+
+            if (dist < 18 || Math.abs(this.y - geom.centralCorridorY) < 10) {
+              this.state = 'EXIT_CENTRAL_CORRIDOR';
+            }
+            break;
+          }
+
+          case 'NAVIGATE_TO_BAY': {
+            if (!this.cais) {
+              this.cais = geom.allBays.find(b => b.id === this.targetBayId);
+            }
+
+            // Ponto de aproximação colado ao corredor de circulação
+            let approachX, approachY;
+            if (this.cais.grupo === "Inferior") {
+              approachX = this.cais.x - 24;
+              approachY = this.cais.y - 12;
+            } else {
+              approachX = this.cais.x - 20;
+              approachY = this.cais.y + 24;
+            }
+
+            const dx = approachX - this.x;
+            const dy = approachY - this.y;
+            const dist = Math.hypot(dx, dy);
+
+            this.angle = lerpAngle(this.angle, Math.atan2(dy, dx), 0.08);
+            this.x += Math.cos(this.angle) * effectiveSpeed;
+            this.y += Math.sin(this.angle) * effectiveSpeed;
+
+            if (dist < 15) this.state = 'ALIGN_PARK';
+            break;
+          }
+
+          case 'ALIGN_PARK': {
+            // Alinhamento exato e acostagem direta por cima do cais
+            const dx = this.cais.x - this.x;
+            const dy = this.cais.y - this.y;
+            const dist = Math.hypot(dx, dy);
+
+            this.angle = lerpAngle(this.angle, this.cais.angle, 0.12);
+
+            if (dist > 1.8) {
+              this.x += Math.cos(this.angle) * (effectiveSpeed * 0.6);
+              this.y += Math.sin(this.angle) * (effectiveSpeed * 0.6);
+            } else {
+              // Completamente parado em cima do cais
+              this.x = this.cais.x;
+              this.y = this.cais.y;
+              this.angle = this.cais.angle;
+              this.state = 'PARKED';
+              caisState[this.cais.id].status = "Ocupado";
+              caisState[this.cais.id].currentBus = this;
+              logEvent(`Autocarro ${this.id} atracado no Cais ${this.cais.id} (${this.zona}). Embarque em curso.`, "text-blue-400");
+              renderPIS();
+            }
+            break;
+          }
+
+          case 'PARKED': {
+            // Parado durante a duração da estadia
+            this.dwellRemaining -= dt * sim.speed;
+            if (this.dwellRemaining <= 0) {
+              this.dwellRemaining = 0;
+              this.state = 'PULLOUT_TO_CORRIDOR';
+              caisState[this.cais.id].status = "Livre";
+              caisState[this.cais.id].currentBus = null;
+              caisState[this.cais.id].historicoContador++;
+              sim.processedCount++;
+              document.getElementById("statProcessed").innerText = sim.processedCount;
+              logEvent(`Embarque concluído no Cais ${this.cais.id}. ${this.id} entra no corredor de saída no meio.`, "text-emerald-400");
+              renderPIS();
+            }
+            break;
+          }
+
+          case 'PULLOUT_TO_CORRIDOR': {
+            // Arranca do cais e entra no corredor do meio
+            const targetCorrX = this.x + 32;
+            const targetCorrY = geom.centralCorridorY;
+
+            const dx = targetCorrX - this.x;
+            const dy = targetCorrY - this.y;
+            const dist = Math.hypot(dx, dy);
+
+            this.angle = lerpAngle(this.angle, Math.atan2(dy, dx), 0.08);
+            this.x += Math.cos(this.angle) * effectiveSpeed;
+            this.y += Math.sin(this.angle) * effectiveSpeed;
+
+            if (Math.abs(this.y - geom.centralCorridorY) < 10) {
+              this.state = 'EXIT_CENTRAL_CORRIDOR';
+            }
+            break;
+          }
+
+          case 'EXIT_CENTRAL_CORRIDOR': {
+            // Desloca-se ao longo do corredor do meio até sair à direita
+            const dx = geom.exitPoint.x - this.x;
+            const dy = geom.exitPoint.y - this.y;
+            const dist = Math.hypot(dx, dy);
+
+            this.angle = lerpAngle(this.angle, 0, 0.1);
+            this.x += Math.cos(this.angle) * (effectiveSpeed * 1.3);
+            this.y = lerp(this.y, geom.centralCorridorY, 0.06);
+
+            if (dist < 15 || this.x > geom.exitPoint.x) {
+              this.state = 'DONE';
+            }
+            break;
+          }
+        }
+      }
+
+      draw(ctx) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.angle);
+
+        // Se estiver rejeitado, desenha aura vermelha de alerta
+        if (this.isRejected) {
+          ctx.strokeStyle = "rgba(239, 68, 68, 0.8)";
+          ctx.lineWidth = 3;
+          ctx.setLineDash([4, 4]);
+          ctx.strokeRect(-this.length / 2 - 4, -this.width / 2 - 4, this.length + 8, this.width + 8);
+          ctx.setLineDash([]);
+        }
+
+        // Desenho vetorial técnico do autocarro CAD
+        drawCadBusVector(ctx, this.length, this.width, this.operator.color, this.state === 'PARKED', true);
+
+        ctx.restore();
+
+        // HUD sobre o autocarro
+        if (this.state === 'PARKED') {
+          this.drawParkedHUD(ctx);
+        } else if (this.isRejected) {
+          // Tag visual "SEM LUGAR"
+          ctx.save();
+          ctx.font = "bold 9px 'JetBrains Mono', monospace";
+          ctx.textAlign = "center";
+          ctx.fillStyle = "#ef4444";
+          ctx.shadowColor = "#000000";
+          ctx.shadowBlur = 6;
+          ctx.fillText(`⚠️ SEM LUGAR (${this.zona})`, this.x, this.y - 20);
+          ctx.fillStyle = "#ffffff";
+          ctx.fillText(this.id, this.x, this.y - 10);
+          ctx.restore();
+        } else {
+          ctx.save();
+          ctx.font = "bold 9px 'JetBrains Mono', monospace";
+          ctx.textAlign = "center";
+          ctx.fillStyle = "#f8fafc";
+          ctx.shadowColor = "#000000";
+          ctx.shadowBlur = 4;
+          ctx.fillText(this.id, this.x, this.y - 14);
+          ctx.restore();
+        }
+      }
+
+      drawParkedHUD(ctx) {
+        const radius = 13;
+        const progress = 1 - (this.dwellRemaining / this.dwellTotal);
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(this.x, this.y - 20, radius, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(this.x, this.y - 20, radius, -Math.PI / 2, (-Math.PI / 2) + (Math.PI * 2 * progress));
+        ctx.strokeStyle = ZONAS[this.zona] ? ZONAS[this.zona].cor : "#10b981";
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+
+        ctx.font = "bold 8px 'JetBrains Mono'";
+        ctx.fillStyle = "#ffffff";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(`${Math.ceil(this.dwellRemaining)}s`, this.x, this.y - 20);
+
+        ctx.font = "bold 9px 'JetBrains Mono'";
+        ctx.fillText(this.id, this.x, this.y - 36);
+        ctx.restore();
+      }
+    }
+
+    function lerp(a, b, t) {
+      return a + (b - a) * t;
+    }
+
+    function lerpAngle(a, b, t) {
+      let diff = (b - a) % (Math.PI * 2);
+      if (diff < -Math.PI) diff += Math.PI * 2;
+      if (diff > Math.PI) diff -= Math.PI * 2;
+      return a + diff * t;
+    }
+
+    function roundRect(ctx, x, y, width, height, radius) {
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.lineTo(x + width - radius, y);
+      ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+      ctx.lineTo(x + width, y + height - radius);
+      ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+      ctx.lineTo(x + radius, y + height);
+      ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+      ctx.lineTo(x, y + radius);
+      ctx.quadraticCurveTo(x, y, x + radius, y);
+      ctx.closePath();
+    }
+
+    // --- DRAW ARCHITECTURAL TERMINAL LAYOUT ---
+    function drawTerminalLayout() {
+      const w = canvasWidth;
+      const h = canvasHeight;
+
+      // 1. Asphalt Ground
+      ctx.fillStyle = "#0a0f1d";
+      ctx.fillRect(0, 0, w, h);
+
+      // 2. Slanted Upper Canopy Boundary
+      ctx.strokeStyle = "rgba(148, 163, 184, 0.35)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(w * 0.12, h * 0.32);
+      ctx.lineTo(w * 0.98, h * 0.05);
+      ctx.stroke();
+
+      // Railway / overhead lines hatch (top-left)
+      drawRailHatch(w, h);
+
+      // 3. ROUNDABOUT (ROTUNDA) AT LEFT SIDE (From Blueprint 1)
+      drawRoundabout(w, h);
+
+      // 4. LOWER ENTRANCE (A entrada é por baixo)
+      drawLowerEntrance(w, h);
+
+      // 5. UPPER BAYS (Cais 11 a 28 em dente de serra ~42°)
+      drawUpperBays();
+
+      // 6. CENTRAL EXIT CORRIDOR (Corredor de saída fica no meio)
+      drawCentralExitCorridor(w, h);
+
+      // 7. LOWER PASSENGER BAYS (Cais 1 a 10) & CONCOURSE
+      drawLowerPassengerBays(w, h);
+
+      // 8. Structural Metallic Columns
+      drawStructuralPillars(w, h);
+    }
+
+    function drawRailHatch(w, h) {
+      ctx.save();
+      ctx.strokeStyle = "rgba(100, 116, 139, 0.12)";
+      ctx.lineWidth = 1;
+      for (let x = 0; x < w * 0.28; x += 18) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x + 40, h * 0.25);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    function drawRoundabout(w, h) {
+      const rb = geom.roundabout;
+      ctx.save();
+
+      // Roadway circle
+      ctx.fillStyle = "rgba(30, 41, 59, 0.85)";
+      ctx.strokeStyle = "#475569";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(rb.cx, rb.cy, rb.rOuter, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Inner central island (jardim/ilha central)
+      ctx.fillStyle = "#0f172a";
+      ctx.strokeStyle = "rgba(56, 189, 248, 0.5)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(rb.cx, rb.cy, rb.rInner, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Circulation arrow on the roundabout
+      ctx.strokeStyle = "rgba(56, 189, 248, 0.6)";
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.arc(rb.cx, rb.cy, (rb.rOuter + rb.rInner) / 2, Math.PI * 0.3, Math.PI * 1.7);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.fillStyle = "rgba(148, 163, 184, 0.6)";
+      ctx.font = "bold 9px 'JetBrains Mono'";
+      ctx.textAlign = "center";
+      ctx.fillText("ROTUNDA DE INVERSÃO", rb.cx, rb.cy + 3);
+
+      ctx.restore();
+    }
+
+    function drawLowerEntrance(w, h) {
+      ctx.save();
+      // Entry road from bottom
+      ctx.fillStyle = "rgba(30, 41, 59, 0.75)";
+      ctx.strokeStyle = "#38bdf8";
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(geom.entryPoint.x - 22, h);
+      ctx.lineTo(geom.entryPoint.x - 12, h * 0.74);
+      ctx.lineTo(geom.entryPoint.x + 22, h * 0.74);
+      ctx.lineTo(geom.entryPoint.x + 32, h);
+      ctx.closePath();
+      ctx.fill();
+
+      // Entrance Text & Arrows
+      ctx.fillStyle = "#38bdf8";
+      ctx.font = "bold 10px 'JetBrains Mono'";
+      ctx.textAlign = "center";
+      ctx.fillText("▲ ENTRADA INFERIOR ▲", geom.entryPoint.x + 6, h - 18);
+      ctx.font = "8px 'Inter'";
+      ctx.fillStyle = "rgba(148, 163, 184, 0.7)";
+      ctx.fillText("(Acesso direto à rotunda)", geom.entryPoint.x + 6, h - 6);
+      ctx.restore();
+    }
+
+    function drawUpperBays() {
+      ctx.save();
+      geom.baysUpper.forEach(bay => {
+        const st = caisState[bay.id];
+        ctx.save();
+        ctx.translate(bay.x, bay.y);
+        ctx.rotate(bay.angle);
+
+        // Angled sawtooth outline
+        ctx.fillStyle = st.status === "Livre" ? "rgba(15, 23, 42, 0.7)" : "rgba(30, 41, 59, 0.9)";
+        ctx.strokeStyle = st.status === "Ocupado" ? "#10b981" : "rgba(16, 185, 129, 0.4)";
+        ctx.lineWidth = 1.2;
+
+        ctx.beginPath();
+        roundRect(ctx, -bay.length / 2, -bay.width / 2, bay.length, bay.width, 3);
+        ctx.fill();
+        ctx.stroke();
+
+        // Edge curb
+        ctx.fillStyle = "#10b981";
+        ctx.fillRect(-bay.length / 2, -bay.width / 2, 4, bay.width);
+
+        ctx.restore();
+
+        // Bay number text (Upright above the slot)
+        ctx.save();
+        ctx.textAlign = "center";
+        ctx.font = "bold 9px 'JetBrains Mono'";
+        ctx.fillStyle = st.status === "Ocupado" ? "#34d399" : "rgba(148, 163, 184, 0.8)";
+        ctx.fillText(`Cais ${bay.id}`, bay.x, bay.y - 18);
+
+        // Status beacon
+        ctx.beginPath();
+        ctx.arc(bay.x, bay.y - 28, 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = st.status === "Livre" ? "#10b981" : "#ef4444";
+        ctx.fill();
+        ctx.restore();
+      });
+      ctx.restore();
+    }
+
+    function drawCentralExitCorridor(w, h) {
+      const cy = geom.centralCorridorY;
+      ctx.save();
+
+      // Pista Central de Circulação e Saída (no meio exato dos cais)
+      ctx.fillStyle = "rgba(30, 41, 59, 0.65)";
+      ctx.fillRect(w * 0.22, cy - 22, w * 0.76, 44);
+
+      // Marcação das faixas tracejadas
+      ctx.strokeStyle = "rgba(56, 189, 248, 0.4)";
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([8, 8]);
+      ctx.beginPath();
+      ctx.moveTo(w * 0.23, cy);
+      ctx.lineTo(w * 0.96, cy);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Identificação no pavimento
+      ctx.fillStyle = "rgba(56, 189, 248, 0.7)";
+      ctx.font = "bold 10px 'JetBrains Mono'";
+      ctx.textAlign = "center";
+      ctx.fillText("➔ CORREDOR DE SAÍDA NO MEIO (ESCOAMENTO) ➔ ➔ ➔", w * 0.58, cy - 6);
+
+      // Saída Geral
+      ctx.fillStyle = "#38bdf8";
+      ctx.font = "bold 10px 'JetBrains Mono'";
+      ctx.fillText("SAÍDA GERAL ➔", geom.exitPoint.x - 45, cy + 16);
+
+      ctx.restore();
+    }
+
+    function drawLowerPassengerBays(w, h) {
+      const cy = geom.centralCorridorY;
+      ctx.save();
+
+      // Plataforma de passageiros mais encostada aos cais 1 a 10
+      const gareY = cy + 74;
+      ctx.fillStyle = "#0f172a";
+      ctx.strokeStyle = "#334155";
+      ctx.lineWidth = 1.5;
+      ctx.fillRect(w * 0.24, gareY, w * 0.74, h - gareY - 10);
+      ctx.strokeRect(w * 0.24, gareY, w * 0.74, h - gareY - 10);
+
+      ctx.fillStyle = "rgba(148, 163, 184, 0.5)";
+      ctx.font = "bold 10px 'Inter'";
+      ctx.textAlign = "left";
+      ctx.fillText("GARE PRINCIPAL DE PASSAGEIROS / CAIS 1 A 10 (JUNTOS AO CORREDOR CENTRAL)", w * 0.26, gareY + 22);
+
+      // Desenho dos Cais 1 a 10 com rotação e dente de serra ajustados
+      geom.baysLower.forEach(bay => {
+        const st = caisState[bay.id];
+        const zoneInfo = ZONAS[bay.zona];
+
+        ctx.save();
+        ctx.translate(bay.x, bay.y);
+        ctx.rotate(bay.angle);
+
+        // Caixa do cais
+        ctx.fillStyle = st.status === "Livre" ? "rgba(15, 23, 42, 0.75)" : "rgba(30, 41, 59, 0.95)";
+        ctx.strokeStyle = zoneInfo.cor;
+        ctx.lineWidth = st.status === "Ocupado" ? 2 : 1.3;
+
+        ctx.beginPath();
+        roundRect(ctx, -bay.length / 2, -bay.width / 2, bay.length, bay.width, 3);
+        ctx.fill();
+        ctx.stroke();
+
+        // Berma de acostagem do autocarro
+        ctx.fillStyle = zoneInfo.cor;
+        ctx.fillRect(-bay.length / 2, -bay.width / 2, 4, bay.width);
+
+        ctx.restore();
+
+        // Número do Cais e Indicador
+        ctx.save();
+        ctx.textAlign = "center";
+        ctx.font = "bold 11px 'JetBrains Mono'";
+        ctx.fillStyle = zoneInfo.cor;
+        ctx.fillText(`Cais ${bay.id}`, bay.x, bay.y - 16);
+
+        ctx.beginPath();
+        ctx.arc(bay.x, bay.y - 26, 3, 0, Math.PI * 2);
+        ctx.fillStyle = st.status === "Livre" ? "#10b981" : (st.status === "Reservado" ? "#f59e0b" : "#ef4444");
+        ctx.fill();
+        ctx.restore();
+      });
+
+      ctx.restore();
+    }
+
+    function drawStructuralPillars(w, h) {
+      ctx.save();
+      const numCols = 10;
+      const colStartX = w * 0.28;
+      const colEndX = w * 0.94;
+      const colSpacing = (colEndX - colStartX) / 9;
+
+      for (let i = 0; i <= 9; i++) {
+        const px = colStartX + i * colSpacing - 18;
+        // Lower pillars
+        drawCadColumn(ctx, px, h * 0.75);
+        // Middle pillars
+        drawCadColumn(ctx, px, h * 0.44);
+      }
+      ctx.restore();
+    }
+
+    function drawCadColumn(ctx, x, y) {
+      ctx.save();
+      ctx.fillStyle = "#334155";
+      ctx.fillRect(x - 4, y - 4, 8, 8);
+      ctx.strokeStyle = "#94a3b8";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x - 3, y - 3, 6, 6);
+      ctx.beginPath();
+      ctx.moveTo(x - 3, y - 3);
+      ctx.lineTo(x + 3, y + 3);
+      ctx.moveTo(x + 3, y - 3);
+      ctx.lineTo(x - 3, y + 3);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // --- INTERACTIVE INSPECTION ---
+    canvas.addEventListener("click", (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const clickY = e.clientY - rect.top;
+
+      let foundBay = null;
+      for (const b of geom.allBays) {
+        const d = Math.hypot(clickX - b.x, clickY - b.y);
+        if (d < 28) {
+          foundBay = b;
+          break;
+        }
+      }
+
+      if (foundBay) {
+        showBayInspector(foundBay.id);
+        return;
+      }
+
+      let foundBus = null;
+      for (const bus of sim.buses) {
+        const d = Math.hypot(clickX - bus.x, clickY - bus.y);
+        if (d < 25) {
+          foundBus = bus;
+          break;
+        }
+      }
+
+      if (foundBus) {
+        showBusInspector(foundBus);
+        return;
+      }
+
+      document.getElementById("inspectorCard").classList.add("hidden");
+    });
+
+    function showBayInspector(bayId) {
+      const st = caisState[bayId];
+      const card = document.getElementById("inspectorCard");
+      const title = document.getElementById("inspectorTitle");
+      const body = document.getElementById("inspectorBody");
+
+      title.innerHTML = `<i class="fa-solid fa-warehouse text-blue-400"></i> Cais ${bayId} (${st.zona})`;
+      
+      let html = `
+        <div class="flex justify-between py-1 border-b border-slate-800">
+          <span class="text-slate-400">Estado:</span>
+          <span class="font-bold ${st.status === 'Livre' ? 'text-emerald-400' : 'text-rose-400'}">${st.status}</span>
+        </div>
+        <div class="flex justify-between py-1 border-b border-slate-800">
+          <span class="text-slate-400">Zona Alocada:</span>
+          <span class="font-semibold text-white">${st.zona} (${st.grupo})</span>
+        </div>
+        <div class="flex justify-between py-1 border-b border-slate-800">
+          <span class="text-slate-400">Total Processados:</span>
+          <span class="font-mono-code text-white">${st.historicoContador}</span>
+        </div>
+      `;
+
+      if (st.currentBus) {
+        html += `
+          <div class="mt-2 pt-2 border-t border-slate-700/80">
+            <span class="text-[10px] text-slate-400 font-semibold uppercase">Veículo no Cais</span>
+            <div class="font-bold text-white text-sm mt-0.5">${st.currentBus.id}</div>
+            <div class="text-xs text-slate-300">${st.currentBus.operator.name}</div>
+            <div class="text-xs text-amber-400 mt-1 font-mono-code">Resta: ${Math.ceil(st.currentBus.dwellRemaining)}s</div>
+            <button onclick="forceDepart(${st.currentBus.targetBayId})" class="mt-2 w-full py-1 bg-rose-600/80 hover:bg-rose-500 text-white rounded text-[11px] font-semibold transition">
+              Concluir & Enviar para Corredor Central
+            </button>
+          </div>
+        `;
+      }
+
+      body.innerHTML = html;
+      card.classList.remove("hidden");
+    }
+
+    function showBusInspector(bus) {
+      const card = document.getElementById("inspectorCard");
+      const title = document.getElementById("inspectorTitle");
+      const body = document.getElementById("inspectorBody");
+
+      title.innerHTML = `<i class="fa-solid fa-bus text-amber-400"></i> ${bus.id}`;
+      body.innerHTML = `
+        <div class="flex justify-between py-1 border-b border-slate-800">
+          <span class="text-slate-400">Operadora:</span>
+          <span class="font-semibold text-white">${bus.operator.name}</span>
+        </div>
+        <div class="flex justify-between py-1 border-b border-slate-800">
+          <span class="text-slate-400">Zona Destino:</span>
+          <span class="font-semibold text-white">${bus.zona}</span>
+        </div>
+        <div class="flex justify-between py-1 border-b border-slate-800">
+          <span class="text-slate-400">Cais Atribuído:</span>
+          <span class="font-bold text-blue-400">Cais ${bus.targetBayId}</span>
+        </div>
+        <div class="flex justify-between py-1 border-b border-slate-800">
+          <span class="text-slate-400">Passageiros:</span>
+          <span class="font-mono-code text-white">${bus.passengers} pax</span>
+        </div>
+        <div class="flex justify-between py-1">
+          <span class="text-slate-400">Fase da Cinemática:</span>
+          <span class="font-mono-code text-cyan-400 text-[10px]">${bus.state}</span>
+        </div>
+      `;
+      card.classList.remove("hidden");
+    }
+
+    document.getElementById("closeInspector").addEventListener("click", () => {
+      document.getElementById("inspectorCard").classList.add("hidden");
+    });
+
+    window.forceDepart = function(bayId) {
+      const b = caisState[bayId].currentBus;
+      if (b) {
+        b.dwellRemaining = 0;
+        document.getElementById("inspectorCard").classList.add("hidden");
+      }
+    };
+
+    // --- DISPATCH & QUEUE SYSTEM ---
+    function spawnBus(id, operatorName, zona, dwellSeconds) {
+      const oper = OPERATORS.find(o => o.name === operatorName) || OPERATORS[0];
+      const alloc = alocarCaisTempoReal(zona);
+
+      if (alloc.modo === "Imediato") {
+        const bus = new BusAgent(id, oper, zona, dwellSeconds);
+        bus.targetBayId = alloc.caisId;
+        caisState[alloc.caisId].status = "Reservado";
+        caisState[alloc.caisId].reservadoPara = id;
+        sim.buses.push(bus);
+        const transMsg = alloc.transbordo ? " [Transbordo para Cais Superior]" : "";
+        logEvent(`[CP-SAT] ${id} atribuído ao Cais ${alloc.caisId} (${zona})${transMsg}. Entrada por baixo via rotunda.`, "text-cyan-400");
+      } else {
+        sim.queue.push({ id, operator: oper, zona, dwellSeconds, targetBayId: alloc.caisId });
+        logEvent(`[Fila] Cais de ${zona} saturados. ${id} retido em espera na aproximação.`, "text-amber-400");
+      }
+      updateStats();
+      renderPIS();
+    }
+
+    function checkQueue() {
+      if (sim.queue.length === 0) return;
+
+      for (let i = 0; i < sim.queue.length; i++) {
+        const item = sim.queue[i];
+        const alloc = alocarCaisTempoReal(item.zona);
+        if (alloc.modo === "Imediato") {
+          sim.queue.splice(i, 1);
+          const bus = new BusAgent(item.id, item.operator, item.zona, item.dwellSeconds);
+          bus.targetBayId = alloc.caisId;
+          caisState[alloc.caisId].status = "Reservado";
+          caisState[alloc.caisId].reservadoPara = item.id;
+          sim.buses.push(bus);
+          logEvent(`[Desbloqueio] Cais ${alloc.caisId} livre! ${item.id} a entrar via rotunda.`, "text-emerald-400");
+          updateStats();
+          renderPIS();
+          break;
+        }
+      }
+    }
+
+    // --- PIS BOARD & METRICS ---
+    function renderPIS() {
+      const container = document.getElementById("caisTableContainer");
+      let html = "";
+
+      CAIS_DATA.forEach(c => {
+        const st = caisState[c.id];
+        const zoneInfo = ZONAS[c.zona];
+        const bus = st.currentBus;
+
+        let badge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">LIVRE</span>`;
+        let busText = `<span class="text-slate-500 italic">Disponível</span>`;
+        let dwellText = "--";
+
+        if (st.status === "Reservado") {
+          badge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30 animate-pulse">A ENTRAR</span>`;
+          busText = `<span class="text-amber-300 font-mono-code font-bold">${st.reservadoPara || 'Aproximação'}</span>`;
+          dwellText = "Rotunda";
+        } else if (st.status === "Ocupado" && bus) {
+          badge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30">EMBARQUE</span>`;
+          busText = `<span class="text-white font-bold font-mono-code">${bus.id}</span> <span class="text-[10px] text-slate-400">(${bus.operator.name})</span>`;
+          dwellText = `${Math.ceil(bus.dwellRemaining)}s`;
+        }
+
+        html += `
+          <div class="flex items-center justify-between p-2 rounded-lg bg-slate-800/60 border border-slate-700/60 hover:bg-slate-800 transition text-xs">
+            <div class="flex items-center gap-2">
+              <span class="w-6 h-6 rounded flex items-center justify-center font-bold font-mono-code text-[11px]" style="background-color: ${zoneInfo.corClara}; color: ${zoneInfo.cor}">
+                ${c.id}
+              </span>
+              <div>
+                <div class="font-semibold text-white flex items-center gap-1.5">
+                  Cais ${c.id}
+                  <span class="text-[10px] px-1 rounded text-slate-400 font-mono-code bg-slate-900">${c.zona}</span>
+                </div>
+                <div class="text-[11px]">${busText}</div>
+              </div>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="text-right">
+                <span class="text-[10px] text-slate-400 block">ESTADIA</span>
+                <span class="font-mono-code text-xs text-slate-200">${dwellText}</span>
+              </div>
+              ${badge}
+            </div>
+          </div>
+        `;
+      });
+
+      container.innerHTML = html;
+      updateOccupancyBars();
+    }
+
+    function updateOccupancyBars() {
+      // Lisboa (1-4)
+      const occLisboa = [1, 2, 3, 4].filter(id => caisState[id].status !== "Livre").length;
+      document.getElementById("occLisboaText").innerText = `${occLisboa} / 4`;
+      const pctLisboa = (occLisboa / 4) * 100;
+      document.getElementById("occLisboaBar").style.width = `${pctLisboa}%`;
+      document.getElementById("occLisboaPct").innerText = `${pctLisboa.toFixed(0)}%`;
+
+      // Fora (5-8)
+      const occFora = [5, 6, 7, 8].filter(id => caisState[id].status !== "Livre").length;
+      document.getElementById("occForaText").innerText = `${occFora} / 4`;
+      const pctFora = (occFora / 4) * 100;
+      document.getElementById("occForaBar").style.width = `${pctFora}%`;
+      document.getElementById("occForaPct").innerText = `${pctFora.toFixed(0)}%`;
+
+      // Norte (9-10)
+      const occNorte = [9, 10].filter(id => caisState[id].status !== "Livre").length;
+      document.getElementById("occNorteText").innerText = `${occNorte} / 2`;
+      const pctNorte = (occNorte / 2) * 100;
+      document.getElementById("occNorteBar").style.width = `${pctNorte}%`;
+      document.getElementById("occNortePct").innerText = `${pctNorte.toFixed(0)}%`;
+
+      // Cais Superiores (11-28)
+      const supIds = ZONAS.Superior.cais;
+      const occSuperior = supIds.filter(id => caisState[id].status !== "Livre").length;
+      document.getElementById("occSuperiorText").innerText = `${occSuperior} / 18`;
+      const pctSuperior = (occSuperior / 18) * 100;
+      document.getElementById("occSuperiorBar").style.width = `${pctSuperior}%`;
+      document.getElementById("occSuperiorPct").innerText = `${pctSuperior.toFixed(0)}%`;
+    }
+
+    function logEvent(msg, colorClass = "text-slate-400") {
+      const container = document.getElementById("eventLogs");
+      const d = new Date();
+      const timeStr = d.toTimeString().split(" ")[0];
+      const div = document.createElement("div");
+      div.className = `${colorClass} text-[11px] leading-tight`;
+      div.innerText = `[${timeStr}] ${msg}`;
+      container.prepend(div);
+
+      if (container.children.length > 40) {
+        container.removeChild(container.lastChild);
+      }
+    }
+
+    function triggerRandomSpawn() {
+      const zoneKeys = ["Lisboa", "Lisboa", "Fora", "Fora", "Norte", "Superior", "Superior"];
+      const randomZone = zoneKeys[Math.floor(Math.random() * zoneKeys.length)];
+      const randomOp = OPERATORS[Math.floor(Math.random() * OPERATORS.length)];
+      const randomId = `AUT-${Math.floor(Math.random() * 899) + 100}`;
+      const dwell = Math.floor(Math.random() * 10) + 10;
+      spawnBus(randomId, randomOp.name, randomZone, dwell);
+    }
+
+    // --- MAIN ANIMATION LOOP ---
+    let lastTimestamp = performance.now();
+
+    function simulationLoop(timestamp) {
+      const dt = Math.min((timestamp - lastTimestamp) / 1000, 0.1);
+      lastTimestamp = timestamp;
+
+      if (sim.running) {
+        sim.timeSeconds += dt * sim.speed;
+
+        const dateObj = new Date(1730462400000 + sim.timeSeconds * 1000);
+        document.getElementById("terminalClock").innerText = dateObj.toTimeString().split(" ")[0];
+
+        // Automatic Traffic
+        if (sim.autoTraffic && timestamp - sim.lastSpawnTime > (7500 / sim.speed)) {
+          sim.lastSpawnTime = timestamp;
+          triggerRandomSpawn();
+        }
+
+        // Update Buses
+        for (let i = sim.buses.length - 1; i >= 0; i--) {
+          const bus = sim.buses[i];
+          bus.update(dt);
+          if (bus.state === 'DONE') {
+            sim.buses.splice(i, 1);
+          }
+        }
+      }
+
+      // Render Everything
+      ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+      drawTerminalLayout();
+
+      // Render Active Buses
+      sim.buses.forEach(bus => bus.draw(ctx));
+
+      requestAnimationFrame(simulationLoop);
+    }
+
+    // --- DISPATCH & OVERFLOW ROUTING LOGIC ---
+    function spawnBus(id, operatorName, zona, dwellSeconds) {
+      const oper = OPERATORS.find(o => o.name === operatorName) || OPERATORS[0];
+      const alloc = alocarCaisTempoReal(zona);
+
+      if (alloc.modo === "Imediato") {
+        const bus = new BusAgent(id, oper, zona, dwellSeconds, false);
+        bus.targetBayId = alloc.caisId;
+        caisState[alloc.caisId].status = "Reservado";
+        caisState[alloc.caisId].reservadoPara = id;
+        sim.buses.push(bus);
+        logEvent(`[CP-SAT] ${id} alocado ao Cais ${alloc.caisId} (${zona}). Entrada por baixo via rotunda.`, "text-cyan-400");
+      } else {
+        // SEM LUGAR: Entra como rejeitado, segue direto pelo corredor do meio para sair e dispara o alerta
+        const bus = new BusAgent(id, oper, zona, dwellSeconds, true);
+        sim.buses.push(bus);
+        sim.rejectedCount++;
+        document.getElementById("statRejected").innerText = sim.rejectedCount;
+
+        triggerOverflowAlert(id, zona);
+        logEvent(`⚠️ [FALTA DE ESPAÇO] Zona ${zona} esgotada! ${id} sem cais livre. Desviado para o corredor do meio de saída.`, "text-rose-400 font-bold");
+      }
+
+      renderPIS();
+    }
+
+    // --- UI EVENT LISTENERS ---
+    document.getElementById("btnPlayPause").addEventListener("click", () => {
+      sim.running = !sim.running;
+      const icon = document.getElementById("playPauseIcon");
+      const text = document.getElementById("playPauseText");
+      if (sim.running) {
+        icon.className = "fa-solid fa-pause";
+        text.innerText = "Pausar";
+      } else {
+        icon.className = "fa-solid fa-play";
+        text.innerText = "Retomar";
+      }
+    });
+
+    document.querySelectorAll(".speed-btn").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        document.querySelectorAll(".speed-btn").forEach(b => {
+          b.className = "speed-btn px-2.5 py-1 rounded text-slate-300 hover:text-white";
+        });
+        e.currentTarget.className = "speed-btn px-2.5 py-1 rounded bg-blue-500 text-white font-bold";
+        sim.speed = parseFloat(e.currentTarget.dataset.speed);
+      });
+    });
+
+    document.getElementById("btnReset").addEventListener("click", () => {
+      sim.buses = [];
+      sim.processedCount = 0;
+      sim.rejectedCount = 0;
+      CAIS_DATA.forEach(c => {
+        caisState[c.id].status = "Livre";
+        caisState[c.id].currentBus = null;
+        caisState[c.id].reservadoPara = null;
+        caisState[c.id].historicoContador = 0;
+      });
+      document.getElementById("statProcessed").innerText = "0";
+      document.getElementById("statRejected").innerText = "0";
+      document.getElementById("alertBanner").classList.add("hidden");
+      logEvent("Simulação reiniciada.", "text-amber-400");
+      renderPIS();
+    });
+
+    // Botão para lotar a zona selecionada e testar o alerta de falta de espaço
+    document.getElementById("btnFillZone").addEventListener("click", () => {
+      const zona = document.getElementById("zoneInput").value;
+      const caisIds = ZONAS[zona].cais;
+      
+      caisIds.forEach((cId, idx) => {
+        if (caisState[cId].status === "Livre") {
+          const fakeBus = new BusAgent(`LOT-${zona.slice(0, 3)}-${cId}`, OPERATORS[idx % OPERATORS.length], zona, 40);
+          fakeBus.targetBayId = cId;
+          const bayGeom = geom.allBays.find(b => b.id === cId);
+          fakeBus.x = bayGeom.x;
+          fakeBus.y = bayGeom.y;
+          fakeBus.angle = bayGeom.angle;
+          fakeBus.state = 'PARKED';
+          caisState[cId].status = "Ocupado";
+          caisState[cId].currentBus = fakeBus;
+          sim.buses.push(fakeBus);
+        }
+      });
+
+      logEvent(`Zona ${zona} propositadamente lotada. Novos pedidos para ${zona} serão rejeitados.`, "text-rose-400");
+      renderPIS();
+    });
+
+    document.getElementById("autoTrafficToggle").addEventListener("change", (e) => {
+      sim.autoTraffic = e.target.checked;
+      logEvent(`Tráfego automático ${sim.autoTraffic ? 'ativado' : 'desativado'}.`);
+    });
+
+    document.getElementById("dispatchForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const id = document.getElementById("busIdInput").value.trim() || "BUS-001";
+      const oper = document.getElementById("operatorInput").value;
+      const zona = document.getElementById("zoneInput").value;
+      const dwell = parseInt(document.getElementById("dwellInput").value) || 12;
+
+      spawnBus(id, oper, zona, dwell);
+
+      const nextNum = Math.floor(Math.random() * 899) + 100;
+      document.getElementById("busIdInput").value = `EXP-${nextNum}`;
+    });
+
+    document.getElementById("clearLogs").addEventListener("click", () => {
+      document.getElementById("eventLogs").innerHTML = "";
+    });
+
+    // --- INITIALIZATION ---
+    window.onload = function() {
+      resizeCanvas();
+      renderPIS();
+
+      // Initial buses demonstrating lower & upper bay parking
+      setTimeout(() => {
+        spawnBus("EXP-101", "Rede Expressos", "Lisboa", 14);
+      }, 300);
+
+      setTimeout(() => {
+        spawnBus("FLX-904", "FlixBus", "Superior", 18);
+      }, 1800);
+
+      setTimeout(() => {
+        spawnBus("RNX-305", "Renex", "Fora", 13);
+      }, 3500);
+
+      setTimeout(() => {
+        spawnBus("TEJ-512", "Rodoviária Tejo", "Superior", 15);
+      }, 5200);
+
+      requestAnimationFrame(simulationLoop);
+    };
+  </script>
+</body>
+</html>

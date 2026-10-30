@@ -2,4 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/AppTIC.Web/AppTIC.Web.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/AppTIC.Web.Tests/AppTIC.Web.Tests.csproj" />
+  </Folder>
 </Solution>
