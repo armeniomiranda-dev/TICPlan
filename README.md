@@ -75,13 +75,17 @@ no mesmo servidor (`ConnectionStrings:DefaultConnection` em `appsettings.json`);
 2. Criar as pastas `C:\AppTIC\site` (aplicação), `C:\AppTIC\dados\gtfs` (feeds GTFS) e `C:\AppTIC\dados\keys`
    (chaves das sessões). Os caminhos estão em `appsettings.Production.json`.
 3. No Gestor do IIS, criar o application pool **AppTIC** com *.NET CLR version* = **No Managed Code**.
-4. Criar o site **AppTIC** com caminho físico `C:\AppTIC\site`, o pool AppTIC e o binding
-   `http` · `10.0.30.97` · porta livre (p.ex. 8080). Também funciona como aplicação dentro de um site existente
-   (em produção: `http://10.0.30.97/TICPlanner`, no Default Web Site). Os links e redirecionamentos usam sempre a raiz
-   da aplicação (`~/`, `Url.Action`), nunca `/`, para funcionar dentro desse caminho.
+4. Criar o site **ticplanner.mobtporto.pt** com caminho físico `C:\AppTIC\site`, o pool AppTIC e os bindings
+   `https` · porta 443 · nome de anfitrião `ticplanner.mobtporto.pt` · *Require Server Name Indication* ·
+   certificado de `ticplanner.mobtporto.pt` (ou `*.mobtporto.pt`), e `http` · porta 80 · `ticplanner.mobtporto.pt`
+   (a aplicação redireciona para https e envia HSTS). Endereço em produção: `https://ticplanner.mobtporto.pt/`.
+   O registo DNS `ticplanner.mobtporto.pt` aponta para `10.0.30.97`. Também funciona como aplicação dentro de um site
+   existente (p.ex. `/TICPlanner` no Default Web Site): os links e redirecionamentos usam sempre a raiz da aplicação
+   (`~/`, `Url.Action`), nunca `/`. Se o log indicar *"Failed to determine the https port for redirect"*, acrescentar
+   `ASPNETCORE_HTTPS_PORT=443` às variáveis de ambiente do `web.config`.
 5. Dar permissão de **Modificar** em `C:\AppTIC\dados` à conta `IIS AppPool\AppTIC`:
    `icacls C:\AppTIC\dados /grant "IIS AppPool\AppTIC:(OI)(CI)M"`
-6. Abrir a porta na firewall do Windows, se for acedida a partir de outras máquinas.
+6. Abrir as portas 443 e 80 na firewall do Windows, se for acedida a partir de outras máquinas.
 7. Para criar o primeiro administrador numa base vazia, definir `Seed:AdminEmail` e `Seed:AdminPassword`
    (p.ex. como variáveis de ambiente `Seed__AdminEmail`/`Seed__AdminPassword` no `web.config` publicado) e retirá-los depois.
 

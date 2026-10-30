@@ -49,8 +49,40 @@
         </div>
         <div class="card-body">
             <div class="d-flex flex-wrap gap-4 small mb-2" id="ocupacaoResumo"></div>
-            <div id="ocupacaoGrafico" style="height:320px"></div>
+            <div id="ocupacaoGrafico" style="height:320px; cursor:pointer"></div>
             <div class="form-text">Quando o TIC é início ou fim de viagem conta o tempo de embarque/desembarque da circulação (10 min se não estiver indicado).</div>
+            <div class="row g-4 mt-1">
+                <div class="col-md-6">
+                    <div class="small fw-semibold mb-1">Tipo de viagem no TIC · dia <span class="text-muted fw-normal" id="tiposDiaTotal"></span></div>
+                    <div id="tiposDia"></div>
+                </div>
+                <div class="col-md-6">
+                    <div class="small fw-semibold mb-1">Tipo de viagem no TIC · <span id="tiposSlotTitulo">slot de 15 min</span> <span class="text-muted fw-normal" id="tiposSlotTotal"></span></div>
+                    <div id="tiposSlot"></div>
+                </div>
+                <div class="col-md-6">
+                    <div class="small fw-semibold mb-1">Tipo de viagem no TIC · <span id="tiposMesTitulo">mês</span> <span class="text-muted fw-normal" id="tiposMesTotal"></span></div>
+                    <div id="tiposMes"></div>
+                </div>
+                <div class="col-md-6">
+                    <div class="small fw-semibold mb-1">Tipo de viagem no TIC · <span id="tiposAnoTitulo">ano</span> <span class="text-muted fw-normal" id="tiposAnoTotal"></span></div>
+                    <div id="tiposAno"></div>
+                </div>
+            </div>
+            <div class="form-text">No mês e no ano conta cada dia em que a circulação se realiza.</div>
+            <hr />
+            <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-2">
+                <div class="small fw-semibold">Destinos mais frequentes <span class="text-muted fw-normal">(viagens que partem do TIC: início ou passagem)</span></div>
+                <div class="btn-group btn-group-sm" role="group" aria-label="Período dos destinos" id="destinosPeriodo">
+                    <input type="radio" class="btn-check" name="destinosPeriodo" id="destinosDia" value="Dia" autocomplete="off" />
+                    <label class="btn btn-outline-secondary" for="destinosDia">Dia</label>
+                    <input type="radio" class="btn-check" name="destinosPeriodo" id="destinosMes" value="Mes" autocomplete="off" checked />
+                    <label class="btn btn-outline-secondary" for="destinosMes">Mês</label>
+                    <input type="radio" class="btn-check" name="destinosPeriodo" id="destinosAno" value="Ano" autocomplete="off" />
+                    <label class="btn btn-outline-secondary" for="destinosAno">Ano</label>
+                </div>
+            </div>
+            <div id="destinos" class="small"></div>
         </div>
     </div>
 }
@@ -104,9 +136,13 @@
                 ej.charts.Chart.Inject(ej.charts.ColumnSeries, ej.charts.Category, ej.charts.Tooltip);
                 const diaInput = document.getElementById('ocupacaoDia');
                 const resumo = document.getElementById('ocupacaoResumo');
-                const cor = '#0d6efd', corAgora = '#084298';
+                const cor = '#0d6efd', corAgora = '#084298', corSelecionado = '#ffc107';
+                const tipos = [
+                    { k: 'Origem', rotulo: 'Partidas', desc: 'o TIC é o início da viagem', cor: '#198754' },
+                    { k: 'Destino', rotulo: 'Chegadas', desc: 'o TIC é o fim da viagem', cor: '#6f42c1' },
+                    { k: 'Passagem', rotulo: 'Passagem', desc: 'chega e parte do TIC', cor: '#6c757d' }];
                 let dados = [];
-                let atual = -1;
+                let atual = -1, selecionado = -1;
 
                 const chart = new ej.charts.Chart({
                     primaryXAxis: { valueType: 'Category', interval: 4, labelIntersectAction: 'Hide', majorGridLines: { width: 0 }, majorTickLines: { width: 0 } },
@@ -118,21 +154,107 @@
                     tooltipRender: function (args) {
                         const d = dados[args.point.index];
                         const fim = dados[args.point.index + 1]?.Hora ?? '24:00';
-                        args.text = `${d.Hora}–${fim}<br/><b>${d.Veiculos}</b> veículo(s) no terminal<br/>${d.Chegadas} chegada(s) · ${d.Partidas} partida(s)`;
+                        args.text = `${d.Hora}–${fim}<br/><b>${d.Veiculos}</b> veículo(s) no terminal<br/>${d.Chegadas} chegada(s) · ${d.Partidas} partida(s)`
+                            + (d.Veiculos > 0 ? '<br/>' + tipos.map(t => `${t.rotulo} ${pct(d[t.k], d.Veiculos)}`).join(' · ') : '');
                     },
-                    pointRender: function (args) { if (args.point.index === atual) args.fill = corAgora; },
+                    pointRender: function (args) {
+                        if (args.point.index === selecionado) args.fill = corSelecionado;
+                        else if (args.point.index === atual) args.fill = corAgora;
+                    },
+                    pointClick: function (args) { chart.series[0].animation.enable = false; selecionar(args.pointIndex); },
                     legendSettings: { visible: false },
                     height: '320px'
                 }, '#ocupacaoGrafico');
 
+                function pct(n, total) { return total > 0 ? `${Math.round(n * 100 / total)}%` : '–'; }
+
+                // Barra 100% e valores por tipo de viagem (partidas, chegadas, passagem).
+                function desenharTipos(el, valores, vazio) {
+                    const total = tipos.reduce((s, t) => s + valores[t.k], 0);
+                    if (total === 0) { el.innerHTML = `<div class="text-muted small">${vazio}</div>`; return total; }
+                    const barra = tipos.filter(t => valores[t.k] > 0).map(t =>
+                        `<div class="progress" role="progressbar" aria-label="${t.rotulo}" aria-valuenow="${valores[t.k]}" aria-valuemin="0" aria-valuemax="${total}" style="width:${valores[t.k] * 100 / total}%">
+                             <div class="progress-bar" style="background-color:${t.cor}"></div></div>`).join('');
+                    const legenda = tipos.map(t =>
+                        `<div title="${t.desc}"><span class="d-inline-block rounded-1 me-1" style="width:.7em;height:.7em;background:${t.cor}"></span><span class="text-muted">${t.rotulo}</span><br/>
+                             <span class="fs-5 fw-semibold">${pct(valores[t.k], total)}</span> <span class="text-muted">(${valores[t.k]})</span></div>`).join('');
+                    el.innerHTML = `<div class="progress-stacked mb-2" style="height:.75rem">${barra}</div><div class="d-flex flex-wrap gap-4 small">${legenda}</div>`;
+                    return total;
+                }
+
+                function selecionar(i) {
+                    selecionado = i;
+                    const titulo = document.getElementById('tiposSlotTitulo'), total = document.getElementById('tiposSlotTotal');
+                    if (i < 0 || !dados[i]) {
+                        titulo.textContent = 'slot de 15 min';
+                        total.textContent = '';
+                        document.getElementById('tiposSlot').innerHTML = '<div class="text-muted small">Clique numa coluna do gráfico para ver o slot.</div>';
+                    } else {
+                        const d = dados[i];
+                        titulo.textContent = `${d.Hora}–${dados[i + 1]?.Hora ?? '24:00'}`;
+                        const n = desenharTipos(document.getElementById('tiposSlot'), d, 'Nenhum veículo no terminal neste slot.');
+                        total.textContent = n > 0 ? `(${n} veículo(s) no terminal)` : '';
+                    }
+                    chart.refresh();
+                }
+
+                let resumoPeriodos = null;
+
+                function desenharDestinos() {
+                    const el = document.getElementById('destinos');
+                    const periodo = document.querySelector('input[name=destinosPeriodo]:checked').value;
+                    const p = resumoPeriodos?.[periodo];
+                    if (!p || p.Destinos.length === 0) { el.innerHTML = '<div class="text-muted">Nenhuma viagem parte do TIC neste período.</div>'; return; }
+                    const max = p.Destinos[0].Viagens;
+                    const esc = s => s.replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
+                    el.innerHTML = p.Destinos.map((d, i) => {
+                        const titulo = esc([d.Nome, ...d.OutrosNomes].join(' · '));
+                        const outros = d.OutrosNomes.length ? ` <span class="text-muted">+${d.OutrosNomes.length}</span>` : '';
+                        return `
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                            <span class="text-muted text-end" style="width:1.5em">${i + 1}</span>
+                            <span class="text-truncate" style="width:14rem" title="${titulo}">${esc(d.Nome)}${outros}</span>
+                            <div class="flex-grow-1"><div class="rounded-1" style="height:.75rem;width:${d.Viagens * 100 / max}%;background:${cor}"></div></div>
+                            <span class="text-end fw-semibold" style="width:3.5em">${pct(d.Viagens, p.PartemDoTic)}</span>
+                            <span class="text-muted text-end" style="width:4.5em">(${d.Viagens})</span>
+                        </div>`;
+                    }).join('')
+                        + `<div class="form-text">% do total de ${p.PartemDoTic.toLocaleString('pt-PT')} viagem(ns) que partem do TIC no período. `
+                        + 'Paragens com o mesmo nome ou muito próximas contam como o mesmo destino; passe o rato sobre o nome para ver os nomes juntados.</div>';
+                }
+
+                async function carregarResumo(dia) {
+                    const r = await fetch(`@Url.Action("Resumo")?dia=${dia}`);
+                    resumoPeriodos = r.ok ? await r.json() : null;
+                    const [ano, mes] = dia.split('-').map(Number);
+                    const blocos = [
+                        ['Mes', new Date(ano, mes - 1, 1).toLocaleDateString('pt-PT', { month: 'long', year: 'numeric' })],
+                        ['Ano', String(ano)]];
+                    for (const [k, titulo] of blocos) {
+                        document.getElementById(`tipos${k}Titulo`).textContent = titulo;
+                        const p = resumoPeriodos?.[k];
+                        const n = p ? desenharTipos(document.getElementById(`tipos${k}`), p, 'Nenhuma circulação no TIC neste período.') : 0;
+                        if (!p) document.getElementById(`tipos${k}`).innerHTML = '<div class="text-muted small">Erro ao carregar o resumo.</div>';
+                        document.getElementById(`tipos${k}Total`).textContent = n > 0 ? `(${n.toLocaleString('pt-PT')} viagem(ns))` : '';
+                    }
+                    desenharDestinos();
+                }
+
+                document.querySelectorAll('input[name=destinosPeriodo]').forEach(i => i.addEventListener('change', desenharDestinos));
+
                 async function carregar() {
                     const dia = diaInput.value;
+                    carregarResumo(dia);
                     const r = await fetch(`@Url.Action("Ocupacao")?dia=${dia}`);
                     if (!r.ok) { resumo.textContent = 'Erro ao carregar a ocupação.'; return; }
-                    dados = await r.json();
+                    const ocupacao = await r.json();
+                    dados = ocupacao.Intervalos;
                     const agora = new Date();
                     const hojeIso = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}-${String(agora.getDate()).padStart(2, '0')}`;
                     atual = dia === hojeIso ? Math.floor((agora.getHours() * 60 + agora.getMinutes()) / 15) : -1;
+
+                    const n = desenharTipos(document.getElementById('tiposDia'), ocupacao, 'Nenhuma circulação no TIC neste dia.');
+                    document.getElementById('tiposDiaTotal').textContent = n > 0 ? `(${n} circulação(ões))` : '';
 
                     const pico = dados.reduce((m, d) => d.Veiculos > m.Veiculos ? d : m, dados[0]);
                     const soma = k => dados.reduce((s, d) => s + d[k], 0);
@@ -141,7 +263,8 @@
                         + item('Pico', pico.Veiculos > 0 ? `${pico.Veiculos} às ${pico.Hora}` : '–')
                         + item('Chegadas', soma('Chegadas')) + item('Partidas', soma('Partidas'));
                     chart.series[0].dataSource = dados;
-                    chart.refresh();
+                    chart.series[0].animation.enable = true;
+                    selecionar(atual);
                 }
 
                 diaInput.addEventListener('change', carregar);

@@ -40,6 +40,20 @@ public class HomeController(ApplicationDbContext db, OcupacaoTerminal ocupacao) 
     public async Task<IActionResult> Ocupacao(DateOnly? dia, CancellationToken ct) =>
         Json(await ocupacao.DoDiaAsync(dia ?? DateOnly.FromDateTime(DateTime.Today), ct));
 
+    /// <summary>Tipo de viagem no TIC e destinos mais frequentes no dia, no mês e no ano do dia indicado.</summary>
+    [HttpGet, Authorize(Roles = Roles.Admin)]
+    public async Task<IActionResult> Resumo(DateOnly? dia, CancellationToken ct)
+    {
+        var d = dia ?? DateOnly.FromDateTime(DateTime.Today);
+        var mes = new DateOnly(d.Year, d.Month, 1);
+        return Json(new
+        {
+            Dia = await ocupacao.DoPeriodoAsync(d, d, ct: ct),
+            Mes = await ocupacao.DoPeriodoAsync(mes, mes.AddMonths(1).AddDays(-1), ct: ct),
+            Ano = await ocupacao.DoPeriodoAsync(new DateOnly(d.Year, 1, 1), new DateOnly(d.Year, 12, 31), ct: ct)
+        });
+    }
+
     [AllowAnonymous]
     [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
     public IActionResult Error() =>
