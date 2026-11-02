@@ -277,16 +277,21 @@
                 const transicao = Math.min(120, (v.FimSegundos - v.InicioSegundos) / 4);
                 const decorrido = tempo - v.InicioSegundos;
                 const restante = v.FimSegundos - tempo;
+                const entrada = SimulacaoPlanta.entrada(cais);
+                const estrada = { x: entrada.x, y: SimulacaoPlanta.ESTRADA_Y };
+                const estacionado = { x: cais.x, y: cais.y, angulo: SimulacaoPlanta.anguloEstacionado(cais) };
                 let posicao;
                 if (decorrido < transicao) {
                     posicao = SimulacaoPlanta.pontoNoPercurso([
                         { x: 185, y: 465 }, { x: 145, y: 410 }, { x: 100, y: 348 },
-                        { x: 190, y: 309 }, { x: 245, y: 224 }, { x: cais.x, y: 224 }, cais
+                        { x: 190, y: 309 }, { x: 245, y: 224 }, estrada, entrada, cais
                     ], decorrido / transicao);
                 } else if (restante < transicao) {
-                    posicao = SimulacaoPlanta.pontoNoPercurso([cais, { x: cais.x, y: 224 }, { x: 1080, y: 224 }], 1 - restante / transicao);
+                    posicao = SimulacaoPlanta.pontoNoPercurso([cais, entrada, estrada, { x: 1080, y: 224 }], 1 - restante / transicao);
+                    // Sai do cais em marcha-atrás, mantendo a orientação de estacionado.
+                    if (posicao.segmento === 0) posicao.angulo = estacionado.angulo;
                 } else {
-                    posicao = cais;
+                    posicao = estacionado;
                 }
                 desenharAutocarro(posicao.x, posicao.y, posicao.angulo, v.ForaDoPlano ? '#f43f5e' : cores[v.zona]);
             }
@@ -294,10 +299,10 @@
             ctx.textAlign = 'center';
             ctx.fillStyle = corCais;
             ctx.font = 'bold 12px sans-serif';
-            ctx.fillText(`C${cais.id}`, cais.x, cais.id <= 8 ? cais.y - 23 : cais.y + 32);
+            ctx.fillText(`C${cais.id}`, cais.x, cais.id <= 8 ? cais.y - 23 : cais.y + 38);
             ctx.fillStyle = '#e2e8f0';
             ctx.font = '11px sans-serif';
-            ctx.fillText(v ? v.ViagemId : 'Livre', cais.x, cais.id <= 8 ? cais.y + 38 : cais.y + 46, 80);
+            ctx.fillText(v ? v.ViagemId : 'Livre', cais.x, cais.id <= 8 ? cais.y + 38 : cais.y + 50, 80);
         }
     }
 
