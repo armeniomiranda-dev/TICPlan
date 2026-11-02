@@ -84,7 +84,7 @@
         temporizadorPlaneamento = setTimeout(() => planear(), 300);
     }
 
-    /** Planeamento do dia com OR-Tools: devolve a promessa do plano (ou null se falhou). */
+    /** Planeamento do dia com Otimização: devolve a promessa do plano (ou null se falhou). */
     async function planear() {
         clearTimeout(temporizadorPlaneamento);
         const versao = ++versaoPlaneamento;
@@ -108,7 +108,7 @@
         }
 
         el('sim-plan').disabled = true;
-        el('sim-status').textContent = `A otimizar o plano do dia com OR-Tools (${candidatas.length} autocarros)...`;
+        el('sim-status').textContent = `A otimizar o plano do dia com Otimização (${candidatas.length} autocarros)...`;
         try {
             const plano = await pedidoTerminal('planear-dia', 'POST', candidatas);
             if (versao !== versaoPlaneamento) return null;
@@ -120,21 +120,21 @@
 
             const semCais = viagens.filter(v => (plano.SemCais ?? []).includes(v.Id));
             el('sim-status').textContent =
-                `Plano OR-Tools: ${candidatas.length - semCais.length} com cais, ${semCais.length} sem cais` +
+                `Plano Otimização: ${candidatas.length - semCais.length} com cais, ${semCais.length} sem cais` +
                 (plano.Otimo ? ' (ótimo).' : ' (melhor solução encontrada no limite de tempo).');
             if (semCais.length)
                 mostrarAlertaLotacao(`${semCais.length} sem cais no plano: ${semCais.map(v => `${v.ViagemId} (${hora(v.InicioSegundos)})`).join(', ')}`);
             else
                 esconderAlertaLotacao();
-            adicionarEvento(`[OR-Tools] Plano do dia: ${candidatas.length - semCais.length}/${candidatas.length} com cais.`);
+            adicionarEvento(`[Otimização] Plano do dia: ${candidatas.length - semCais.length}/${candidatas.length} com cais.`);
             atualizar();
             return plano;
         } catch (erro) {
             if (versao !== versaoPlaneamento) return null;
             alocacoes = SimulacaoPlaneador.alocar(viagens);
-            el('sim-status').textContent = 'Plano provisório pela regra do primeiro cais livre (OR-Tools indisponível).';
-            mostrarAlertaLotacao(`OR-Tools indisponível: ${erro.message}`);
-            adicionarEvento(`[OR-Tools] Falha no planeamento: ${erro.message}`, true);
+            el('sim-status').textContent = 'Plano provisório pela regra do primeiro cais livre (Otimização indisponível).';
+            mostrarAlertaLotacao(`Otimização indisponível: ${erro.message}`);
+            adicionarEvento(`[Otimização] Falha no planeamento: ${erro.message}`, true);
             atualizar();
             return null;
         } finally {
@@ -487,10 +487,10 @@
         const cais = alocacoes.get(extra.Id);
         if (cais != null) {
             caisSelecionado = cais;
-            adicionarEvento(`[OR-Tools] ${id} atribuído ao cais ${cais}.`);
+            adicionarEvento(`[Otimização] ${id} atribuído ao cais ${cais}.`);
             atualizar();
         } else {
-            adicionarEvento(`[OR-Tools] Sem cais para ${id}: o terminal está cheio nessa janela.`, true);
+            adicionarEvento(`[Otimização] Sem cais para ${id}: o terminal está cheio nessa janela.`, true);
         }
     }
 

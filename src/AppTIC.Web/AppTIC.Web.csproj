@@ -20,10 +20,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Remove="Simulacao\**\*.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
     <!-- A configuração de desenvolvimento (BD local) não vai para o servidor. -->
     <Content Update="appsettings.Development.json" CopyToPublishDirectory="Never" />
   </ItemGroup>
