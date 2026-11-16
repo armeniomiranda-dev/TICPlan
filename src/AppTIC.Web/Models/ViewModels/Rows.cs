@@ -9,10 +9,16 @@ public record ParagemRow(int Id, string Codigo, string Nome, decimal? Latitude, 
 
 public record CirculacaoRow(int Id, string ViagemId, string Operador, string? LinhaId, string? DesignacaoLinha,
     string? Ambito, string? Origem, string? Destino, string? Chegada, string? Partida, int NumDias,
-    DateTime? Primeiro, DateTime? Ultimo, DateTime? AutorizacaoValidade, string? Dono);
+    DateTime? Primeiro, DateTime? Ultimo, DateTime? AutorizacaoValidade, string? Dono, int? Importacao = null);
 
 public record GtfsFeedRow(int Id, string Nome, string? Operador, string Ficheiro, double TamanhoMb, string Estado,
     DateTime? DataInicio, DateTime? DataFim, int NumRotas, int NumViagens, int NumViagensTic, DateTime CriadoEm, string? Dono);
+
+public record ImportacaoRow(int Id, string Origem, string Nome, string? Fonte, string Estado, DateTime? DataInicio, DateTime? DataFim,
+    int Circulacoes, int Aplicacoes, DateTime? AplicadaEm, DateTime CriadoEm, string? Dono);
+
+/// <summary>Lote de importação de um feed GTFS (lista na página de importação do feed).</summary>
+public record ImportacaoResumo(int Id, DateTime? AplicadaEm, DateOnly? DataInicio, DateOnly? DataFim, int Circulacoes);
 
 public record RegistoRow(long Id, DateTime Data, string Nivel, string Categoria, string Acao, string Mensagem,
     int? GtfsFeedId, string? UserName, string? Dono);

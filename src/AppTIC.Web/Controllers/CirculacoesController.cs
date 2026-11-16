@@ -12,10 +12,12 @@ namespace AppTIC.Web.Controllers;
 
 public class CirculacoesController(ApplicationDbContext db, ICurrentUser currentUser, IActivityLog log, GtfsFeedService gtfs) : Controller
 {
-    public async Task<IActionResult> Index(int? operadorId = null)
+    public async Task<IActionResult> Index(int? operadorId = null, int? importacaoId = null)
     {
         var query = db.Circulacoes.AsQueryable();
         if (operadorId is not null) query = query.Where(c => c.OperadorId == operadorId);
+        if (importacaoId is not null) query = query.Where(c => c.ImportacaoId == importacaoId);
+        ViewBag.ImportacaoId = importacaoId;
 
         var isAdmin = currentUser.IsAdmin;
         var data = await query
@@ -25,12 +27,12 @@ public class CirculacoesController(ApplicationDbContext db, ICurrentUser current
                 c.Id, c.ViagemId, Operador = c.Operador!.Abreviatura ?? c.Operador.Designacao, c.LinhaId, c.DesignacaoLinha,
                 c.Ambito, Origem = c.Origem!.Nome, Destino = c.Destino!.Nome, c.Chegada, c.Partida,
                 NumDias = c.Dias.Count, Primeiro = c.Dias.Min(d => (DateOnly?)d.Data), Ultimo = c.Dias.Max(d => (DateOnly?)d.Data),
-                c.AutorizacaoValidade, Dono = isAdmin ? c.Owner!.Email : null
+                c.AutorizacaoValidade, Dono = isAdmin ? c.Owner!.Email : null, c.ImportacaoId
             })
             .ToListAsync();
         var rows = data.Select(c => new CirculacaoRow(c.Id, c.ViagemId, c.Operador, c.LinhaId, c.DesignacaoLinha,
             c.Ambito?.DisplayName(), c.Origem, c.Destino, c.Chegada?.ToString("HH:mm"), c.Partida?.ToString("HH:mm"),
-            c.NumDias, c.Primeiro.ToDateTime(), c.Ultimo.ToDateTime(), c.AutorizacaoValidade.ToDateTime(), c.Dono)).ToList();
+            c.NumDias, c.Primeiro.ToDateTime(), c.Ultimo.ToDateTime(), c.AutorizacaoValidade.ToDateTime(), c.Dono, c.ImportacaoId)).ToList();
         return View(rows);
     }
 

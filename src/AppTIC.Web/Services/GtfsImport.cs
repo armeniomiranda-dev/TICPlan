@@ -44,11 +44,12 @@ public record GtfsImportPreview(
     IReadOnlyList<GtfsImportRotaPreview> Rotas, IReadOnlyList<string> Conflitos, IReadOnlyList<string> Avisos,
     DateOnly Inicio, DateOnly Fim, int DiasCirculacao);
 
-public record GtfsImportResultado(int ParagensNovas, int ParagensAtualizadas, int CirculacoesNovas, int CirculacoesAtualizadas, int Ignoradas, int Dias);
+public record GtfsImportResultado(int ImportacaoId, int ParagensNovas, int ParagensAtualizadas, int CirculacoesNovas, int CirculacoesAtualizadas, int Ignoradas, int Dias);
 
 /// <summary>
 /// Importa paragens, circulações (com percurso) e calendário a partir do GTFS filtrado TIC de um feed.
 /// Paragem ↔ stop_id (Código); Circulação ↔ trip_id (ID de viagem). Volta a importar atualiza os existentes.
+/// Cada importação fica registada como um lote (<see cref="Importacao"/>): as circulações ficam com o Id do lote.
 /// </summary>
 public class GtfsImportService(ApplicationDbContext db, GtfsFeedService gtfs, IActivityLog log)
 {
@@ -96,9 +97,13 @@ public class GtfsImportService(ApplicationDbContext db, GtfsFeedService gtfs, IA
         return new GtfsImportPreview(novas, atualizar, iguais, rotas, conflitos, dados.Avisos, inicio, fim, dias);
     }
 
+    /// <param name="importacaoId">Lote a atualizar (reimportação); null cria um lote novo.</param>
     public async Task<GtfsImportResultado> ImportarAsync(GtfsFeed feed, GtfsDadosImportacao dados, ISet<string> routeIds,
-        DateOnly inicio, DateOnly fim, CancellationToken ct = default)
+        DateOnly inicio, DateOnly fim, int? importacaoId = null, CancellationToken ct = default)
     {
+        var lote = importacaoId is null ? null
+            : await db.Importacoes.FirstOrDefaultAsync(i => i.Id == importacaoId && i.Origem == ImportacaoOrigem.Gtfs && i.GtfsFeedId == feed.Id, ct)
+              ?? throw new InvalidDataException($"A importação #{importacaoId} não existe ou não é deste feed.");
         var operador = await db.Operadores.FirstAsync(o => o.Id == feed.OperadorId, ct);
         var tic = gtfs.ParagensTic(operador).ToHashSet(StringComparer.Ordinal);
         var hoje = DateOnly.FromDateTime(DateTime.Today);
@@ -107,6 +112,12 @@ public class GtfsImportService(ApplicationDbContext db, GtfsFeedService gtfs, IA
         var aImportar = viagens.Where(v => Estado(feed, v, circulacoes, out _) is not false).ToList();
 
         await using var tx = await db.Database.BeginTransactionAsync(ct);
+
+        if (lote is null)
+        {
+            lote = new Importacao { OwnerId = feed.OwnerId, Origem = ImportacaoOrigem.Gtfs, GtfsFeedId = feed.Id, Nome = feed.Nome };
+            db.Importacoes.Add(lote);
+        }
 
         // 1) Paragens usadas pelas viagens importadas
         var codigos = aImportar.SelectMany(v => v.Paragens).Distinct().ToList();
@@ -155,6 +166,7 @@ public class GtfsImportService(ApplicationDbContext db, GtfsFeedService gtfs, IA
             c.Origem = paragens[v.Paragens[0]];
             c.Destino = paragens[v.Paragens[^1]];
             c.GtfsFeedId = feed.Id;
+            c.Importacao = lote;
             // Percurso a partir da paragem do TIC (inclusive).
             var noTic = Math.Max(0, v.Paragens.ToList().FindIndex(tic.Contains));
             c.Percurso = v.Paragens.Skip(noTic).Select((p, i) => new PercursoParagem { Sequencia = i + 1, Paragem = paragens[p] }).ToList();
@@ -170,12 +182,22 @@ public class GtfsImportService(ApplicationDbContext db, GtfsFeedService gtfs, IA
                 c.Partida = v.Partida;
             }
         }
+        lote.Estado = ImportacaoEstado.Aplicada;
+        lote.AplicadaEm = DateTime.UtcNow;
+        lote.Aplicacoes++;
+        lote.Rotas = string.Join("\n", routeIds.Order(StringComparer.Ordinal));
+        lote.DataInicio = inicio;
+        lote.DataFim = fim;
+        lote.NumOperadores = 1;
+        lote.NumParagens = codigos.Count;
+        lote.NumCirculacoes = aImportar.Count;
+        lote.NumDias = totalDias;
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
 
-        var r = new GtfsImportResultado(paragensNovas, paragensAtualizadas, novas, aImportar.Count - novas, viagens.Count - aImportar.Count, totalDias);
+        var r = new GtfsImportResultado(lote.Id, paragensNovas, paragensAtualizadas, novas, aImportar.Count - novas, viagens.Count - aImportar.Count, totalDias);
         await log.LogAsync(CategoriaRegisto.Gtfs, "Importação",
-            $"Importação ({inicio:dd/MM/yyyy}–{fim:dd/MM/yyyy}, {routeIds.Count} rota(s)): paragens {r.ParagensNovas} novas / {r.ParagensAtualizadas} atualizadas; "
+            $"Importação #{lote.Id}{(importacaoId is null ? "" : " (reimportação)")} ({inicio:dd/MM/yyyy}–{fim:dd/MM/yyyy}, {routeIds.Count} rota(s)): paragens {r.ParagensNovas} novas / {r.ParagensAtualizadas} atualizadas; "
             + $"circulações {r.CirculacoesNovas} novas / {r.CirculacoesAtualizadas} atualizadas / {r.Ignoradas} ignoradas (conflito); {r.Dias} dias de calendário.",
             r.Ignoradas > 0 ? NivelRegisto.Aviso : NivelRegisto.Info, feed.Id, feed.OwnerId);
         return r;

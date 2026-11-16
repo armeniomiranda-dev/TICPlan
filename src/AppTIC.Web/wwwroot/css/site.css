@@ -10,6 +10,14 @@ main { flex: 1; }
 .badge-estado-ValidoComAvisos { background: #fd7e14; }
 .badge-estado-Invalido { background: #dc3545; }
 .badge-estado-Carregado { background: #6c757d; }
+.imp-Excel { background: #198754; }
+.imp-GTFS { background: #0d6efd; }
+.imp-Aplicada { background: #6c757d; }
+.imp-Pendente { background: #fd7e14; }
+.cmp-Igual { background: #198754; }
+.cmp-Diferente { background: #dc3545; }
+.cmp-SoExcel { background: #fd7e14; }
+.cmp-SoGtfs { background: #0d6efd; }
 .nivel-Erro { color: #dc3545; font-weight: 600; }
 .nivel-Aviso { color: #fd7e14; font-weight: 600; }
 #calendario, #calendarioCirculacao { background: #fff; padding: .75rem; border-radius: .5rem; }

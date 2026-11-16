@@ -69,6 +69,10 @@
         <div class="col-md-3"><span class="text-muted">Data de início / data de fim</span><br />@(primeiroDia?.ToString("dd/MM/yyyy") ?? "–") a @(ultimoDia?.ToString("dd/MM/yyyy") ?? "–")</div>
         <div class="col-md-3"><span class="text-muted">Embarque/desembarque</span><br />@(Model.TempoEmbarqueMinutos is { } m ? $"{m} min" : "–")</div>
         <div class="col-md-3"><span class="text-muted">Declaração de capacidade</span><br />@(Model.DeclaracaoCapacidade ? "sim" : "não") @Model.IdDcp</div>
+        @if (podeEditar && Model.ImportacaoId is { } lote)
+        {
+            <div class="col-md-3"><span class="text-muted">Importação</span><br /><a asp-controller="Importacoes" asp-action="Details" asp-route-id="@lote">#@lote</a></div>
+        }
     </div>
 </div>
 

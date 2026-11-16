@@ -49,6 +49,7 @@
                             <li class="nav-item"><a class="nav-link @Active("GtfsFeeds")" asp-controller="GtfsFeeds" asp-action="Index"><i class="bi bi-file-earmark-zip"></i> Feeds GTFS</a></li>
                             @if (isAdmin)
                             {
+                                <li class="nav-item"><a class="nav-link @Active("Importacoes")" asp-controller="Importacoes" asp-action="Index"><i class="bi bi-box-arrow-in-down"></i> Importações</a></li>
                                 <li class="nav-item"><a class="nav-link @Active("Registos")" asp-controller="Registos" asp-action="Index"><i class="bi bi-journal-text"></i> Registos</a></li>
                                 <li class="nav-item"><a class="nav-link @Active("Admin")" asp-controller="Admin" asp-action="Utilizadores"><i class="bi bi-people"></i> Utilizadores</a></li>
                             }

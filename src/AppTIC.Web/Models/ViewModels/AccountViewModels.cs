@@ -69,3 +69,36 @@ public class GtfsUploadViewModel
     [Required(ErrorMessage = "Escolha o ficheiro .zip."), Display(Name = "Ficheiro GTFS (.zip)")]
     public IFormFile? Ficheiro { get; set; }
 }
+
+public class ExcelUploadViewModel
+{
+    /// <summary>Lote a atualizar com um ficheiro novo; null = lote novo.</summary>
+    public int? Id { get; set; }
+
+    [Required(ErrorMessage = "Indique um nome para a importação."), StringLength(200), Display(Name = "Nome")]
+    public string Nome { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Escolha o ficheiro .xlsx."), Display(Name = "Ficheiro Excel (.xlsx)")]
+    public IFormFile? Ficheiro { get; set; }
+}
+
+/// <summary>Página de detalhe de um lote de importação.</summary>
+public class ImportacaoDetalhe
+{
+    public required AppTIC.Web.Models.Domain.Importacao Importacao { get; init; }
+    /// <summary>Circulações que pertencem atualmente ao lote.</summary>
+    public int NumCirculacoes { get; init; }
+    public List<RegistoRow> Registos { get; init; } = [];
+
+    // ---- Excel ----
+    public AppTIC.Web.Services.ExcelImportPreview? Preview { get; set; }
+    /// <summary>O ficheiro guardado não pôde ser lido.</summary>
+    public string? Erro { get; set; }
+
+    public List<AppTIC.Web.Infrastructure.LookupItem> Feeds { get; set; } = [];
+    public int? FeedId { get; set; }
+    public AppTIC.Web.Services.ComparacaoGtfs? Comparacao { get; set; }
+    public string? ErroComparacao { get; set; }
+    /// <summary>Circulações já existentes com o trip_id das viagens correspondidas, por lote de importação.</summary>
+    public List<(int? Lote, int Total)> Duplicadas { get; set; } = [];
+}

@@ -2,6 +2,7 @@
 @{
     ViewData["Title"] = "Circulações";
     var isAdmin = User.IsInRole(Roles.Admin);
+    var importacaoId = (int?)ViewBag.ImportacaoId;
 }
 <div class="page-header">
     <h1>Circulações</h1>
@@ -10,6 +11,15 @@
         <a class="btn btn-primary" asp-action="Create"><i class="bi bi-plus-lg"></i> Nova circulação</a>
     }
 </div>
+
+@if (importacaoId is not null)
+{
+    <div class="alert alert-info py-2 small d-flex align-items-center gap-2">
+        <i class="bi bi-funnel"></i>
+        <span>A mostrar só as circulações da <a asp-controller="Importacoes" asp-action="Details" asp-route-id="@importacaoId" class="alert-link">importação #@importacaoId</a>.</span>
+        <a asp-action="Index" class="ms-auto">Ver todas</a>
+    </div>
+}
 
 @if (isAdmin)
 {
@@ -22,6 +32,9 @@ else
         <a class="btn btn-sm btn-outline-primary" href="@Url.Action("Criar", "Pedidos")?circulacaoId=${Id}" title="Pedido de alteração"><i class="bi bi-pencil-square"></i></a>
     </script>
 }
+<script id="importacaoTemplate" type="text/x-template">
+    ${if(Importacao)}<a href="@Url.Action("Details", "Importacoes")/${Importacao}">#${Importacao}</a>${/if}
+</script>
 <script id="viagemTemplate" type="text/x-template">
     <a href="@Url.Action("Details")/${Id}" class="fw-semibold">${ViagemId}</a>
 </script>
@@ -43,6 +56,7 @@ else
         <e-grid-column field="Primeiro" headerText="De" type="date" format="dd/MM/yyyy" width="110"></e-grid-column>
         <e-grid-column field="Ultimo" headerText="Até" type="date" format="dd/MM/yyyy" width="110"></e-grid-column>
         <e-grid-column field="AutorizacaoValidade" headerText="Validade aut." type="date" format="dd/MM/yyyy" width="120"></e-grid-column>
+        <e-grid-column field="Importacao" headerText="Importação" template="#importacaoTemplate" visible="@isAdmin" textAlign="Right" width="115"></e-grid-column>
         <e-grid-column field="Dono" headerText="Utilizador" visible="@isAdmin" width="180"></e-grid-column>
         <e-grid-column headerText="" template="#acoesTemplate" width="100" allowFiltering="false" allowSorting="false"></e-grid-column>
     </e-grid-columns>

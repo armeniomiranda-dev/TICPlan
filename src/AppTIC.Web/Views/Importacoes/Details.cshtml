@@ -1,0 +1,285 @@
+@model ImportacaoDetalhe
+@{
+    var imp = Model.Importacao;
+    var excel = imp.Origem == ImportacaoOrigem.Excel;
+    ViewData["Title"] = $"Importação #{imp.Id}";
+    var pendente = imp.Estado == ImportacaoEstado.Pendente;
+    var pv = Model.Preview;
+    var cmp = Model.Comparacao;
+    var eliminar = $"Eliminar a importação #{imp.Id} e as {Model.NumCirculacoes} circulação(ões) que lhe pertencem (com calendário, percurso e pedidos de alteração)? As paragens e os operadores mantêm-se.";
+    string Classe(string estado) => estado switch
+    {
+        ComparacaoGtfs.Igual => "cmp-Igual", ComparacaoGtfs.Diferente => "cmp-Diferente",
+        ComparacaoGtfs.SoExcel => "cmp-SoExcel", _ => "cmp-SoGtfs"
+    };
+    int Ordem(string estado) => estado switch
+    {
+        ComparacaoGtfs.Diferente => 0, ComparacaoGtfs.SoExcel => 1, ComparacaoGtfs.SoGtfs => 2, _ => 3
+    };
+}
+<div class="page-header">
+    <h1>
+        Importação <span class="text-primary">#@imp.Id</span>
+        <span class="badge imp-@(excel ? "Excel" : "GTFS") fs-6 align-middle">@imp.Origem.DisplayName()</span>
+        <span class="badge imp-@imp.Estado fs-6 align-middle">@imp.Estado.DisplayName()</span>
+    </h1>
+    <div class="d-flex flex-wrap gap-2">
+        @if (excel)
+        {
+            <a class="btn btn-outline-primary" asp-action="Excel" asp-route-id="@imp.Id"><i class="bi bi-upload"></i> Atualizar ficheiro</a>
+            @if (imp.CaminhoArmazenamento is not null)
+            {
+                <a class="btn btn-outline-secondary" asp-action="Download" asp-route-id="@imp.Id"><i class="bi bi-download"></i> Excel</a>
+            }
+        }
+        else if (imp.GtfsFeedId is { } feedId)
+        {
+            <a class="btn btn-primary" asp-controller="GtfsFeeds" asp-action="Importar" asp-route-id="@feedId" asp-route-importacaoId="@imp.Id"><i class="bi bi-arrow-repeat"></i> Voltar a importar</a>
+            <a class="btn btn-outline-secondary" asp-controller="GtfsFeeds" asp-action="Details" asp-route-id="@feedId"><i class="bi bi-file-earmark-zip"></i> Feed</a>
+        }
+        <a class="btn btn-outline-secondary" asp-controller="Circulacoes" asp-action="Index" asp-route-importacaoId="@imp.Id"><i class="bi bi-bus-front"></i> Circulações (@Model.NumCirculacoes)</a>
+        <button type="button" class="btn btn-outline-danger" onclick="appTic.postConfirm('@Url.Action("Delete", new { id = imp.Id })', '@eliminar')"><i class="bi bi-trash"></i> Eliminar</button>
+        <a class="btn btn-outline-secondary" asp-action="Index">Voltar</a>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body row g-2 small">
+        <div class="col-md-3"><span class="text-muted">Nome</span><br />@imp.Nome</div>
+        @if (excel)
+        {
+            <div class="col-md-3"><span class="text-muted">Ficheiro</span><br />@imp.NomeFicheiro (@((imp.TamanhoBytes / 1024d).ToString("N0")) kB)</div>
+        }
+        else
+        {
+            <div class="col-md-3"><span class="text-muted">Feed GTFS</span><br />@(imp.GtfsFeed?.Nome ?? "(feed eliminado)")</div>
+        }
+        <div class="col-md-3"><span class="text-muted">Criada</span><br />@imp.CriadoEm.ToLocalTime().ToString("dd/MM/yyyy HH:mm") por @imp.Owner?.Email</div>
+        <div class="col-md-3"><span class="text-muted">Aplicada</span><br />
+            @(imp.AplicadaEm is { } a ? $"{a.ToLocalTime():dd/MM/yyyy HH:mm} ({imp.Aplicacoes}x)" : "ainda não")</div>
+        <div class="col-md-3"><span class="text-muted">Dias de calendário importados</span><br />
+            @(imp.DataInicio is { } di ? $"{di:dd/MM/yyyy} – {imp.DataFim:dd/MM/yyyy}" : "–")</div>
+        <div class="col-md-6"><span class="text-muted">Última aplicação</span><br />
+            @if (imp.AplicadaEm is null)
+            {
+                <span>–</span>
+            }
+            else
+            {
+                <span>@imp.NumCirculacoes circulações · @imp.NumOperadores operador(es) · @imp.NumParagens paragens · @imp.NumDias.ToString("N0") dias de circulação</span>
+            }
+        </div>
+        <div class="col-md-3"><span class="text-muted">Circulações neste lote agora</span><br /><strong>@Model.NumCirculacoes</strong></div>
+        @if (!excel && !string.IsNullOrEmpty(imp.Rotas))
+        {
+            <div class="col-12"><span class="text-muted">Rotas importadas (route_id)</span><br /><code>@imp.Rotas.Replace("\n", ", ")</code></div>
+        }
+        @if (imp.Sha256 is not null)
+        {
+            <div class="col-12 text-muted">SHA-256 <code>@imp.Sha256</code></div>
+        }
+    </div>
+</div>
+
+@if (Model.Erro is not null)
+{
+    <div class="alert alert-danger">@Model.Erro</div>
+}
+
+@if (pv is not null)
+{
+    <h2 class="h5">@(pendente ? "O que vai ser importado" : "Voltar a importar o ficheiro")</h2>
+    <p class="text-muted small">
+        Cria os <strong>operadores</strong> em falta (NIF; os existentes não são alterados), cria ou atualiza as <strong>paragens</strong>
+        (código = <code>paragem_id</code>) e as <strong>circulações</strong> (ID de viagem = <code>viagem_id</code>) com todos os campos da folha,
+        o <strong>percurso</strong> (a partir da paragem do TIC), as <strong>horas no TIC</strong> e o <strong>calendário</strong>.
+        Nas circulações já existentes, os dias são substituídos apenas dentro do intervalo do calendário da folha
+        @if (pv.Inicio is { } i0)
+        {
+            <span>(@i0.ToString("dd/MM/yyyy") – @pv.Fim?.ToString("dd/MM/yyyy"))</span>
+        }
+        e os períodos de horas no TIC editados à mão mantêm-se.
+    </p>
+
+    <div class="row g-3 mb-3 small">
+        <div class="col-md-3"><div class="card h-100"><div class="card-body">
+            <div class="text-muted">Operadores</div>
+            <strong>@pv.Operadores.Count</strong> no ficheiro · <strong>@pv.OperadoresNovos</strong> novos
+        </div></div></div>
+        <div class="col-md-3"><div class="card h-100"><div class="card-body">
+            <div class="text-muted">Paragens</div>
+            <strong>@pv.ParagensNovas</strong> novas · <strong>@pv.ParagensAtualizar</strong> a atualizar · @pv.ParagensIguais sem alterações
+        </div></div></div>
+        <div class="col-md-3"><div class="card h-100"><div class="card-body">
+            <div class="text-muted">Circulações</div>
+            <strong>@pv.Novas</strong> novas · <strong>@pv.Atualizar</strong> a atualizar ·
+            <span class="@(pv.EmConflito > 0 ? "text-danger" : "")">@pv.EmConflito em conflito</span>
+        </div></div></div>
+        <div class="col-md-3"><div class="card h-100"><div class="card-body">
+            <div class="text-muted">Calendário</div>
+            <strong>@pv.Dias.ToString("N0")</strong> dias de circulação
+        </div></div></div>
+    </div>
+
+    @if (pv.Conflitos.Count > 0)
+    {
+        <div class="alert alert-warning small">
+            <strong>Não serão importadas:</strong>
+            <ul class="mb-0">
+                @foreach (var c in pv.Conflitos) { <li>@c</li> }
+            </ul>
+        </div>
+    }
+    @if (pv.Avisos.Count > 0)
+    {
+        <div class="alert alert-secondary small">
+            <strong>Avisos da leitura do ficheiro:</strong>
+            <ul class="mb-0">
+                @foreach (var c in pv.Avisos) { <li>@c</li> }
+            </ul>
+        </div>
+    }
+    @foreach (var (loteDup, total) in Model.Duplicadas)
+    {
+        <div class="alert alert-warning small">
+            <i class="bi bi-exclamation-triangle"></i>
+            <strong>@total circulações</strong> destas viagens já existem, importadas do GTFS com o <code>trip_id</code> como ID de viagem
+            @if (loteDup is { } ld)
+            {
+                <span>(<a asp-action="Details" asp-route-id="@ld" class="alert-link">importação #@ld</a>).</span>
+            }
+            else
+            {
+                <span>(sem nº de importação: são anteriores a esta funcionalidade).</span>
+            }
+            O Excel usa outro ID (<code>viagem_id</code>), por isso aplicar este ficheiro cria-as de novo e ficam em duplicado@(loteDup is null ? "." : ": elimine essa importação GTFS se o Excel a substitui.")
+        </div>
+    }
+
+    <form method="post" asp-action="Aplicar" asp-route-id="@imp.Id" class="card mb-4" onsubmit="this.querySelector('button[type=submit]').disabled = true">
+        <table class="table table-sm table-hover mb-0 small align-middle">
+            <thead>
+                <tr>
+                    <th>Operador</th><th>NIF</th>
+                    <th class="text-end">Circulações</th><th class="text-end">Novas</th><th class="text-end">A atualizar</th>
+                    <th class="text-end">Conflitos</th><th class="text-end">Dias</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var o in pv.Operadores)
+                {
+                    <tr>
+                        <td>@o.Nome @if (o.Novo) { <span class="badge text-bg-info">novo</span> }</td>
+                        <td>@o.Nif</td>
+                        <td class="text-end">@o.Circulacoes</td><td class="text-end">@o.Novas</td><td class="text-end">@o.Atualizar</td>
+                        <td class="text-end @(o.Conflitos > 0 ? "text-danger" : "")">@o.Conflitos</td>
+                        <td class="text-end">@o.Dias.ToString("N0")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <div class="card-footer d-flex flex-wrap align-items-center gap-3">
+            <button type="submit" class="btn btn-primary" @(pv.Novas + pv.Atualizar == 0 ? "disabled" : "")>
+                <i class="bi bi-box-arrow-in-down"></i> @(imp.AplicadaEm is null ? "Aplicar importação" : pendente ? "Aplicar o ficheiro novo" : "Voltar a importar")
+            </button>
+            @if (pv.Ausentes > 0)
+            {
+                <div class="form-check m-0 small">
+                    <input class="form-check-input" type="checkbox" id="removerAusentes" name="removerAusentes" value="true" checked />
+                    <label class="form-check-label" for="removerAusentes">
+                        Eliminar as <strong>@pv.Ausentes</strong> circulação(ões) desta importação que já não constam do ficheiro
+                    </label>
+                </div>
+            }
+            <span class="text-muted small">Pode demorar cerca de um minuto.</span>
+        </div>
+    </form>
+
+    <h2 class="h5"><i class="bi bi-arrow-left-right"></i> Comparação com o GTFS</h2>
+    <form method="get" asp-action="Details" asp-route-id="@imp.Id" class="row g-2 align-items-end small mb-2">
+        <div class="col-md-6">
+            <label class="form-label" for="feedId">Feed GTFS (filtrado TIC) a comparar</label>
+            <select class="form-select form-select-sm" id="feedId" name="feedId" onchange="this.form.submit()">
+                @if (Model.FeedId is null) { <option value="">Escolha o feed…</option> }
+                @foreach (var f in Model.Feeds)
+                {
+                    <option value="@f.Value" selected="@(f.Value == Model.FeedId?.ToString())">@f.Text</option>
+                }
+            </select>
+        </div>
+        <div class="col text-muted">
+            A correspondência é pelo ID de viagem: igual ao <code>trip_id</code> ou a uma das suas partes
+            (ex.: <code>008-01</code> ↔ <code>101750:00801:63:0</code>).
+        </div>
+    </form>
+
+    @if (Model.Feeds.Count == 0)
+    {
+        <div class="alert alert-secondary small">Não há feeds GTFS com GTFS filtrado TIC para comparar. <a asp-controller="GtfsFeeds" asp-action="Upload">Carregue um feed</a>.</div>
+    }
+    @if (Model.ErroComparacao is not null)
+    {
+        <div class="alert alert-danger small">@Model.ErroComparacao</div>
+    }
+    @if (cmp is not null)
+    {
+        <div class="row g-3 mb-3 small">
+            <div class="col-md-3"><div class="card h-100"><div class="card-body">
+                <div class="text-muted">Nos dois</div>
+                <span class="badge cmp-Igual">@cmp.Conta(ComparacaoGtfs.Igual) iguais</span>
+                <span class="badge cmp-Diferente">@cmp.Conta(ComparacaoGtfs.Diferente) diferentes</span>
+            </div></div></div>
+            <div class="col-md-3"><div class="card h-100"><div class="card-body">
+                <div class="text-muted">Só no Excel</div>
+                <span class="badge cmp-SoExcel">@cmp.Conta(ComparacaoGtfs.SoExcel)</span>
+                <span class="text-muted">circulações sem viagem no GTFS</span>
+            </div></div></div>
+            <div class="col-md-3"><div class="card h-100"><div class="card-body">
+                <div class="text-muted">Só no GTFS</div>
+                <span class="badge cmp-SoGtfs">@cmp.Conta(ComparacaoGtfs.SoGtfs)</span>
+                <span class="text-muted">viagens que passam no TIC e não estão no Excel</span>
+            </div></div></div>
+            <div class="col-md-3"><div class="card h-100"><div class="card-body">
+                <div class="text-muted">Período comparado (dias)</div>
+                @if (cmp.Inicio is { } ci)
+                {
+                    <strong>@ci.ToString("dd/MM/yyyy") – @cmp.Fim?.ToString("dd/MM/yyyy")</strong>
+                    <div class="form-text">Comum ao calendário do Excel e ao do feed.</div>
+                }
+                else
+                {
+                    <span class="text-danger">Os calendários do Excel e do feed não têm dias em comum: só se comparam horas e percurso.</span>
+                }
+            </div></div></div>
+        </div>
+
+        <script id="cmpEstadoTemplate" type="text/x-template">
+            <span class="badge ${Classe}">${Estado}</span>
+        </script>
+        <ejs-grid id="gridComparacao" dataSource="@(cmp.Linhas.OrderBy(l => Ordem(l.Estado)).ThenBy(l => l.ViagemId ?? l.TripId).Select(l => new { l.Estado, Classe = Classe(l.Estado), l.ViagemId, l.Operador, l.Linha, l.TripId, l.ChegadaExcel, l.ChegadaGtfs, l.PartidaExcel, l.PartidaGtfs, l.DiasExcel, l.DiasGtfs, l.DiasSoExcel, l.DiasSoGtfs, l.Diferencas }).ToList())"
+                  allowPaging="true" allowSorting="true" allowFiltering="true" allowExcelExport="true" allowResizing="true" allowTextWrap="true"
+                  toolbar="@(new List<string> { "Search", "ExcelExport" })" toolbarClick="appTic.gridToolbarClick">
+            <e-grid-filtersettings type="Excel"></e-grid-filtersettings>
+            <e-grid-pagesettings pageSize="25"></e-grid-pagesettings>
+            <e-grid-columns>
+                <e-grid-column field="Estado" headerText="Resultado" template="#cmpEstadoTemplate" width="125"></e-grid-column>
+                <e-grid-column field="ViagemId" headerText="viagem_id (Excel)" width="140"></e-grid-column>
+                <e-grid-column field="TripId" headerText="trip_id (GTFS)" width="190"></e-grid-column>
+                <e-grid-column field="Operador" headerText="Operador" width="150"></e-grid-column>
+                <e-grid-column field="Linha" headerText="Linha" width="110"></e-grid-column>
+                <e-grid-column field="ChegadaExcel" headerText="Cheg. Excel" textAlign="Center" width="105"></e-grid-column>
+                <e-grid-column field="ChegadaGtfs" headerText="Cheg. GTFS" textAlign="Center" width="105"></e-grid-column>
+                <e-grid-column field="PartidaExcel" headerText="Part. Excel" textAlign="Center" width="105"></e-grid-column>
+                <e-grid-column field="PartidaGtfs" headerText="Part. GTFS" textAlign="Center" width="105"></e-grid-column>
+                <e-grid-column field="DiasExcel" headerText="Dias Excel" textAlign="Right" width="100"></e-grid-column>
+                <e-grid-column field="DiasGtfs" headerText="Dias GTFS" textAlign="Right" width="100"></e-grid-column>
+                <e-grid-column field="DiasSoExcel" headerText="Só Excel" textAlign="Right" width="95"></e-grid-column>
+                <e-grid-column field="DiasSoGtfs" headerText="Só GTFS" textAlign="Right" width="95"></e-grid-column>
+                <e-grid-column field="Diferencas" headerText="Diferenças" width="420"></e-grid-column>
+            </e-grid-columns>
+        </ejs-grid>
+    }
+}
+
+<h2 class="h5 mt-4">Registo da importação</h2>
+<partial name="_RegistosGrid" model="Model.Registos" />

@@ -70,6 +70,10 @@ public class Circulacao : OwnedEntity
     public int? GtfsFeedId { get; set; }
     public GtfsFeed? GtfsFeed { get; set; }
 
+    /// <summary>Importação em bloco (GTFS ou Excel) que criou ou atualizou por último esta circulação.</summary>
+    public int? ImportacaoId { get; set; }
+    public Importacao? Importacao { get; set; }
+
     /// <summary>Folha "calendário": dias em que a circulação se realiza.</summary>
     public List<CirculacaoDia> Dias { get; set; } = [];
 
@@ -97,6 +101,7 @@ public class PercursoParagem
 public enum OrigemHorario
 {
     [Display(Name = "GTFS")] Gtfs,
+    [Display(Name = "Excel")] Excel,
     [Display(Name = "Manual")] Manual
 }
 

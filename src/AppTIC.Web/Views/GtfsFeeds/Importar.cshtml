@@ -2,6 +2,9 @@
 @{
     var feed = (GtfsFeed)ViewBag.Feed;
     var intervalo = ((DateOnly Inicio, DateOnly Fim)?)ViewBag.Intervalo;
+    var lote = (Importacao?)ViewBag.Importacao;
+    var lotes = (List<ImportacaoResumo>)ViewBag.Importacoes;
+    var rotasLote = lote?.Rotas?.Split((char)10, StringSplitOptions.RemoveEmptyEntries).ToHashSet(StringComparer.Ordinal);
     ViewData["Title"] = $"Importar {feed.Nome}";
 }
 <div class="page-header">
@@ -16,7 +19,27 @@
     os restantes campos (âmbito, autorização, DCP, …) não são alterados. Horas a partir das 24:00 passam para o dia seguinte.
 </p>
 
+@if (lote is not null)
+{
+    <div class="alert alert-info py-2 small">
+        <i class="bi bi-arrow-repeat"></i> A <strong>voltar a importar a importação #@lote.Id</strong>: as circulações ficam no mesmo lote
+        (por omissão, com o mesmo intervalo e as mesmas rotas). <a asp-action="Importar" asp-route-id="@feed.Id" class="alert-link">Fazer antes uma importação nova</a>.
+    </div>
+}
+else if (lotes.Count > 0)
+{
+    <div class="alert alert-secondary py-2 small">
+        Esta página cria uma <strong>importação nova</strong>. Importações já feitas deste feed (pode voltar a importar no mesmo lote):
+        @foreach (var l in lotes)
+        {
+            <a asp-action="Importar" asp-route-id="@feed.Id" asp-route-importacaoId="@l.Id" class="alert-link ms-2">#@l.Id</a>
+            <span class="text-muted">(@l.DataInicio?.ToString("dd/MM/yyyy")–@l.DataFim?.ToString("dd/MM/yyyy"), @l.Circulacoes circulações)</span>
+        }
+    </div>
+}
+
 <form method="get" asp-action="Importar" asp-route-id="@feed.Id" class="card mb-3">
+    @if (lote is not null) { <input type="hidden" name="importacaoId" value="@lote.Id" /> }
     <div class="card-body row g-2 align-items-end small">
         <div class="col-auto"><label class="form-label" for="inicio">Dias de</label><input type="date" class="form-control form-control-sm" id="inicio" name="inicio" value="@Model.Inicio.ToString("yyyy-MM-dd")" /></div>
         <div class="col-auto"><label class="form-label" for="fim">até</label><input type="date" class="form-control form-control-sm" id="fim" name="fim" value="@Model.Fim.ToString("yyyy-MM-dd")" /></div>
@@ -57,6 +80,7 @@
 <form method="post" asp-action="Importar" asp-route-id="@feed.Id" onsubmit="this.querySelector('button[type=submit]').disabled = true">
     <input type="hidden" name="inicio" value="@Model.Inicio.ToString("yyyy-MM-dd")" />
     <input type="hidden" name="fim" value="@Model.Fim.ToString("yyyy-MM-dd")" />
+    @if (lote is not null) { <input type="hidden" name="importacaoId" value="@lote.Id" /> }
     <div class="card">
         <table class="table table-sm table-hover mb-0 small align-middle">
             <thead>
@@ -70,7 +94,7 @@
                 @foreach (var r in Model.Rotas)
                 {
                     <tr>
-                        <td><input type="checkbox" class="form-check-input" name="rotas" value="@r.RouteId" checked="@(r.Novas + r.Atualizar > 0)" /></td>
+                        <td><input type="checkbox" class="form-check-input" name="rotas" value="@r.RouteId" checked="@(rotasLote is not null ? rotasLote.Contains(r.RouteId) : r.Novas + r.Atualizar > 0)" /></td>
                         <td>@r.Linha</td><td>@r.Designacao</td><td><code>@r.RouteId</code></td>
                         <td class="text-end">@r.Viagens</td><td class="text-end">@r.Novas</td><td class="text-end">@r.Atualizar</td>
                         <td class="text-end @(r.Conflitos > 0 ? "text-danger" : "")">@r.Conflitos</td>
@@ -83,7 +107,7 @@
             </tbody>
         </table>
         <div class="card-footer d-flex gap-2">
-            <button type="submit" class="btn btn-primary" @(Model.Rotas.Count == 0 ? "disabled" : "")><i class="bi bi-box-arrow-in-down"></i> Importar rotas selecionadas</button>
+            <button type="submit" class="btn btn-primary" @(Model.Rotas.Count == 0 ? "disabled" : "")><i class="bi bi-box-arrow-in-down"></i> @(lote is null ? "Importar rotas selecionadas" : $"Voltar a importar na importação #{lote.Id}")</button>
             <a class="btn btn-outline-secondary" asp-action="Details" asp-route-id="@feed.Id">Cancelar</a>
         </div>
     </div>

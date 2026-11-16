@@ -69,6 +69,8 @@ builder.Services.AddScoped<IActivityLog, ActivityLog>();
 builder.Services.AddScoped<GtfsFeedService>();
 builder.Services.AddScoped<GtfsDbLoader>();
 builder.Services.AddScoped<GtfsImportService>();
+builder.Services.AddScoped<ImportacaoService>();
+builder.Services.AddScoped<ExcelImportService>();
 builder.Services.AddScoped<OcupacaoTerminal>();
 builder.Services.AddScoped<SimulacaoService>();
 builder.Services.AddSingleton<ICaisService, CaisService>();

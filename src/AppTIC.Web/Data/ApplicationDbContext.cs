@@ -29,6 +29,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<PercursoParagem> Percursos => Set<PercursoParagem>();
     public DbSet<CirculacaoHorarioTic> CirculacaoHorariosTic => Set<CirculacaoHorarioTic>();
     public DbSet<GtfsFeed> GtfsFeeds => Set<GtfsFeed>();
+    public DbSet<Importacao> Importacoes => Set<Importacao>();
     public DbSet<RegistoAtividade> Registos => Set<RegistoAtividade>();
     public DbSet<PedidoAlteracao> PedidosAlteracao => Set<PedidoAlteracao>();
 
@@ -65,6 +66,15 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             e.HasOne(x => x.Operador).WithMany(o => o.Circulacoes).HasForeignKey(x => x.OperadorId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.Origem).WithMany().HasForeignKey(x => x.OrigemId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(x => x.Destino).WithMany().HasForeignKey(x => x.DestinoId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(x => x.GtfsFeed).WithMany().HasForeignKey(x => x.GtfsFeedId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(x => x.Importacao).WithMany(i => i.Circulacoes).HasForeignKey(x => x.ImportacaoId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        b.Entity<Importacao>(e =>
+        {
+            e.ToTable("importacoes");
+            e.Property(x => x.Origem).HasConversion<string>().HasMaxLength(10);
+            e.Property(x => x.Estado).HasConversion<string>().HasMaxLength(20);
             e.HasOne(x => x.GtfsFeed).WithMany().HasForeignKey(x => x.GtfsFeedId).OnDelete(DeleteBehavior.SetNull);
         });
 

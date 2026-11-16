@@ -14,6 +14,7 @@ public static class CategoriaRegisto
     public const string Sessao = "Sessão";
     public const string Gtfs = "GTFS";
     public const string Dados = "Dados";
+    public const string Importacao = "Importação";
     public const string Administracao = "Administração";
 }
 

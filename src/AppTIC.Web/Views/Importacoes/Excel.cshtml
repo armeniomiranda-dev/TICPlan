@@ -1,0 +1,47 @@
+@model ExcelUploadViewModel
+@{
+    var atualizar = Model.Id is not null;
+    ViewData["Title"] = atualizar ? $"Atualizar a importação #{Model.Id}" : "Importar do Excel";
+}
+<div class="page-header"><h1>@ViewData["Title"]</h1></div>
+
+<form asp-action="Excel" method="post" enctype="multipart/form-data" class="card card-form"
+      onsubmit="this.querySelector('button[type=submit]').disabled = true">
+    <input type="hidden" asp-for="Id" />
+    <div class="card-body">
+        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label asp-for="Nome" class="form-label"></label>
+                <input asp-for="Nome" class="form-control" placeholder="ex.: Planeamento RNE 2026 – rev. 18" />
+                <span asp-validation-for="Nome" class="text-danger small"></span>
+            </div>
+            <div class="col-md-6">
+                <label asp-for="Ficheiro" class="form-label"></label>
+                <input asp-for="Ficheiro" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="form-control" />
+                <span asp-validation-for="Ficheiro" class="text-danger small"></span>
+            </div>
+        </div>
+        <p class="form-text mt-3 mb-0">
+            Folha de planeamento do TIC (modelo <code>template_planeamento_simplificado</code>), com as folhas
+            <code>info_operador</code>, <code>paragens</code>, <code>circulações</code>, <code>calendário</code> e <code>percursos</code>;
+            pode ter vários operadores. As colunas são encontradas pelo nome do cabeçalho (<code>operador_nif</code>, <code>viagem_id</code>, …).
+            @if (atualizar)
+            {
+                <span>O ficheiro novo substitui o anterior <strong>na mesma importação #@Model.Id</strong>.</span>
+            }
+            O carregamento não altera nada: a seguir vê o que vai ser criado ou atualizado e a comparação com o GTFS, e só depois aplica.
+        </p>
+    </div>
+    <div class="card-footer d-flex gap-2">
+        <button type="submit" class="btn btn-primary"><i class="bi bi-upload"></i> Carregar e rever</button>
+        @if (atualizar)
+        {
+            <a asp-action="Details" asp-route-id="@Model.Id" class="btn btn-outline-secondary">Cancelar</a>
+        }
+        else
+        {
+            <a asp-action="Index" class="btn btn-outline-secondary">Cancelar</a>
+        }
+    </div>
+</form>

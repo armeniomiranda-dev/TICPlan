@@ -118,7 +118,7 @@ public class GtfsFeedsController(ApplicationDbContext db, GtfsFeedService gtfs, 
     // ---- Importação de paragens, circulações e calendário ----
 
     [Authorize(Roles = Roles.Admin)]
-    public async Task<IActionResult> Importar(int id, DateOnly? inicio, DateOnly? fim, CancellationToken ct)
+    public async Task<IActionResult> Importar(int id, DateOnly? inicio, DateOnly? fim, int? importacaoId, CancellationToken ct)
     {
         var feed = await db.GtfsFeeds.Include(f => f.Operador).FirstOrDefaultAsync(f => f.Id == id, ct);
         if (feed is null) return NotFound();
@@ -127,35 +127,46 @@ public class GtfsFeedsController(ApplicationDbContext db, GtfsFeedService gtfs, 
             TempData["Erro"] = "O feed tem de ter operador e GTFS filtrado TIC para importar.";
             return RedirectToAction(nameof(Details), new { id });
         }
+        // Reimportação de um lote: por omissão, o mesmo intervalo e as mesmas rotas.
+        var lote = importacaoId is null ? null
+            : await db.Importacoes.FirstOrDefaultAsync(x => x.Id == importacaoId && x.Origem == ImportacaoOrigem.Gtfs && x.GtfsFeedId == id, ct);
+        if (importacaoId is not null && lote is null)
+        {
+            TempData["Erro"] = $"A importação #{importacaoId} não existe ou não é deste feed.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
         var dados = await importacao.LerAsync(feed, ct);
         var intervalo = dados.Intervalo();
-        var (i, f) = (inicio ?? feed.DataInicio ?? intervalo?.Inicio ?? DateOnly.FromDateTime(DateTime.Today),
-                      fim ?? feed.DataFim ?? intervalo?.Fim ?? DateOnly.FromDateTime(DateTime.Today));
+        var (i, f) = (inicio ?? lote?.DataInicio ?? feed.DataInicio ?? intervalo?.Inicio ?? DateOnly.FromDateTime(DateTime.Today),
+                      fim ?? lote?.DataFim ?? feed.DataFim ?? intervalo?.Fim ?? DateOnly.FromDateTime(DateTime.Today));
         if (f < i) f = i;
         if (f.DayNumber - i.DayNumber > MaxDiasImportacao) f = i.AddDays(MaxDiasImportacao);
         ViewBag.Feed = feed;
         ViewBag.Intervalo = intervalo;
+        ViewBag.Importacao = lote;
+        ViewBag.Importacoes = await db.Importacoes.Where(x => x.GtfsFeedId == id).OrderByDescending(x => x.Id)
+            .Select(x => new ImportacaoResumo(x.Id, x.AplicadaEm, x.DataInicio, x.DataFim, x.Circulacoes.Count)).ToListAsync(ct);
         return View(await importacao.PreverAsync(feed, dados, i, f, ct));
     }
 
     [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = Roles.Admin)]
-    public async Task<IActionResult> Importar(int id, DateOnly inicio, DateOnly fim, string[] rotas, CancellationToken ct)
+    public async Task<IActionResult> Importar(int id, DateOnly inicio, DateOnly fim, string[] rotas, int? importacaoId, CancellationToken ct)
     {
         var feed = await db.GtfsFeeds.Include(f => f.Operador).FirstOrDefaultAsync(f => f.Id == id, ct);
         if (feed is null) return NotFound();
         if (fim < inicio || fim.DayNumber - inicio.DayNumber > MaxDiasImportacao || rotas.Length == 0)
         {
             TempData["Erro"] = $"Escolha pelo menos uma rota e um intervalo válido (máximo {MaxDiasImportacao + 1} dias).";
-            return RedirectToAction(nameof(Importar), new { id, inicio = inicio.ToString("yyyy-MM-dd"), fim = fim.ToString("yyyy-MM-dd") });
+            return RedirectToAction(nameof(Importar), new { id, inicio = inicio.ToString("yyyy-MM-dd"), fim = fim.ToString("yyyy-MM-dd"), importacaoId });
         }
         try
         {
             var dados = await importacao.LerAsync(feed, ct);
-            var r = await importacao.ImportarAsync(feed, dados, rotas.ToHashSet(StringComparer.Ordinal), inicio, fim, ct);
+            var r = await importacao.ImportarAsync(feed, dados, rotas.ToHashSet(StringComparer.Ordinal), inicio, fim, importacaoId, ct);
             TempData[r.Ignoradas > 0 ? "Erro" : "Ok"] =
-                $"Importação concluída: {r.ParagensNovas} paragens novas, {r.ParagensAtualizadas} atualizadas; {r.CirculacoesNovas} circulações novas, "
+                $"Importação #{r.ImportacaoId} concluída: {r.ParagensNovas} paragens novas, {r.ParagensAtualizadas} atualizadas; {r.CirculacoesNovas} circulações novas, "
                 + $"{r.CirculacoesAtualizadas} atualizadas" + (r.Ignoradas > 0 ? $", {r.Ignoradas} ignoradas por conflito" : "") + $"; {r.Dias} dias de calendário.";
-            return RedirectToAction("Index", "Circulacoes", new { operadorId = feed.OperadorId });
+            return RedirectToAction("Details", "Importacoes", new { id = r.ImportacaoId });
         }
         catch (Exception ex) when (ex is InvalidDataException or IOException or CsvHelper.CsvHelperException or DbUpdateException)
         {

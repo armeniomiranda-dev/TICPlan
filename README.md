@@ -114,3 +114,23 @@ GTFS_Agg: viagens com pelo menos um `stop_time` numa paragem do TIC → os seus 
 os `stop_id` definidos na ficha do operador (campo "Paragens do TIC no GTFS"); se estiver vazio, usa
 `Gtfs:ParagensTicPorOmissao` do `appsettings.json` (RNE `100`, FlixBus `cd022a5c-…`, CP `94_2006`, STCP `TIC1-3`/`CMP1,2,5,6`,
 Metro `5703`). Os `stop_id` são os originais de cada feed, sem o sufixo de origem (`_S2JE`, `_5G5E`, …) que o GTFS_Agg acrescenta.
+
+## Importações (lotes) e folha Excel de planeamento
+
+Cada importação em bloco fica registada na tabela `importacoes` com um **nº de importação**; as circulações criadas ou
+atualizadas guardam esse nº (`circulacoes.importacao_id`). No menu **Importações** (Admin) pode, por lote: ver as
+circulações, **voltar a importar**, **atualizar** (Excel: carregar um ficheiro novo no mesmo nº) e **eliminar** (apaga as
+circulações do lote com calendário, percurso e pedidos; paragens e operadores mantêm-se).
+
+- **GTFS**: a importação na página do feed cria um lote novo; "Voltar a importar" repete-a no mesmo lote (mesmo intervalo
+  e rotas por omissão).
+- **Excel** (`Importações → Importar do Excel`): folha de planeamento com as folhas `info_operador`, `paragens`,
+  `circulações`, `calendário` e `percursos` (vários operadores no mesmo ficheiro; colunas encontradas pelo nome do
+  cabeçalho). O carregamento não altera nada: mostra o que vai ser criado/atualizado e só depois se aplica. Operador ↔ NIF
+  (os existentes não são alterados), paragem ↔ `paragem_id`, circulação ↔ `viagem_id` (se o `viagem_id` se repetir na folha,
+  fica `viagem_id/ID_TIC`). O ficheiro fica guardado em `Gtfs:StoragePath/excel`.
+- **Comparação com o GTFS**: no detalhe de um lote Excel escolhe-se um feed (GTFS filtrado TIC) e comparam-se horas de
+  chegada/partida no TIC, dias (no período comum aos dois calendários) e sequência de paragens. A correspondência é pelo
+  ID de viagem: igual ao `trip_id` ou a uma das suas partes sem pontuação (`008-01` ↔ `101750:00801:63:0`).
+  A importação do GTFS usa o `trip_id` como ID de viagem e a do Excel o `viagem_id`: importar os dois para o mesmo
+  operador cria circulações em duplicado (a página avisa e indica o lote GTFS a eliminar).

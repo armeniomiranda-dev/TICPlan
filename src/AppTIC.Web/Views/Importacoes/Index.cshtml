@@ -1,0 +1,67 @@
+@model List<ImportacaoRow>
+@{
+    ViewData["Title"] = "Importações";
+}
+<div class="page-header">
+    <h1>Importações</h1>
+    <div class="d-flex gap-2">
+        <a class="btn btn-primary" asp-action="Excel"><i class="bi bi-file-earmark-spreadsheet"></i> Importar do Excel</a>
+        <a class="btn btn-outline-primary" asp-controller="GtfsFeeds" asp-action="Index"><i class="bi bi-file-earmark-zip"></i> Importar do GTFS</a>
+    </div>
+</div>
+
+<p class="text-muted small">
+    Cada importação em bloco de paragens, circulações e calendário (do <strong>GTFS</strong>, na página do feed, ou da
+    <strong>folha Excel de planeamento</strong>) fica registada com um <strong>nº de importação</strong>. As circulações guardam o nº
+    da última importação que as criou ou atualizou; por esse nº pode ver as circulações, voltar a importar, atualizar com um ficheiro
+    novo ou eliminar o lote inteiro.
+</p>
+
+<script id="idTemplate" type="text/x-template">
+    <a href="@Url.Action("Details")/${Id}" class="fw-semibold">#${Id}</a>
+</script>
+<script id="origemTemplate" type="text/x-template">
+    <span class="badge imp-${Origem}">${Origem}</span>
+</script>
+<script id="estadoTemplate" type="text/x-template">
+    <span class="badge imp-${Estado}">${Estado}</span>
+</script>
+<script id="circTemplate" type="text/x-template">
+    <a href="@Url.Action("Index", "Circulacoes")?importacaoId=${Id}">${Circulacoes}</a>
+</script>
+<script id="acoesTemplate" type="text/x-template">
+    <a class="btn btn-sm btn-outline-primary" href="@Url.Action("Details")/${Id}" title="Ver, voltar a importar ou atualizar"><i class="bi bi-arrow-repeat"></i></a>
+    <button type="button" class="btn btn-sm btn-outline-danger" title="Eliminar a importação e as suas circulações"
+            data-id="${Id}" data-circulacoes="${Circulacoes}" onclick="eliminarImportacao(this)"><i class="bi bi-trash"></i></button>
+</script>
+
+<ejs-grid id="grid" dataSource="@Model" allowPaging="true" allowSorting="true" allowFiltering="true" allowExcelExport="true"
+          allowResizing="true" toolbar="@(new List<string> { "Search", "ExcelExport" })" toolbarClick="appTic.gridToolbarClick">
+    <e-grid-filtersettings type="Excel"></e-grid-filtersettings>
+    <e-grid-pagesettings pageSize="25"></e-grid-pagesettings>
+    <e-grid-columns>
+        <e-grid-column field="Id" headerText="Nº" template="#idTemplate" width="80"></e-grid-column>
+        <e-grid-column field="Origem" headerText="Origem" template="#origemTemplate" width="100"></e-grid-column>
+        <e-grid-column field="Nome" headerText="Nome" width="220"></e-grid-column>
+        <e-grid-column field="Fonte" headerText="Ficheiro / feed" width="240"></e-grid-column>
+        <e-grid-column field="Estado" headerText="Estado" template="#estadoTemplate" width="120"></e-grid-column>
+        <e-grid-column field="DataInicio" headerText="Dias de" type="date" format="dd/MM/yyyy" width="110"></e-grid-column>
+        <e-grid-column field="DataFim" headerText="até" type="date" format="dd/MM/yyyy" width="110"></e-grid-column>
+        <e-grid-column field="Circulacoes" headerText="Circulações" template="#circTemplate" textAlign="Right" width="115"></e-grid-column>
+        <e-grid-column field="Aplicacoes" headerText="Aplicações" textAlign="Right" width="110"></e-grid-column>
+        <e-grid-column field="AplicadaEm" headerText="Aplicada em" type="datetime" format="dd/MM/yyyy HH:mm" width="150"></e-grid-column>
+        <e-grid-column field="CriadoEm" headerText="Criada em" type="datetime" format="dd/MM/yyyy HH:mm" width="150"></e-grid-column>
+        <e-grid-column field="Dono" headerText="Utilizador" width="180"></e-grid-column>
+        <e-grid-column headerText="" template="#acoesTemplate" width="100" allowFiltering="false" allowSorting="false"></e-grid-column>
+    </e-grid-columns>
+</ejs-grid>
+
+@section Scripts {
+    <script>
+        function eliminarImportacao(botao) {
+            const id = botao.dataset.id, n = botao.dataset.circulacoes;
+            appTic.postConfirm('@Url.Action("Delete")/' + id,
+                'Eliminar a importação #' + id + ' e as ' + n + ' circulações que lhe pertencem (com calendário, percurso e pedidos de alteração)? As paragens e os operadores mantêm-se.');
+        }
+    </script>
+}
