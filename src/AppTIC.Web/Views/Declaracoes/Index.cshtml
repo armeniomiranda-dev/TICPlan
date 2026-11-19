@@ -53,11 +53,17 @@
                 <div class="card-header">Nova declaração</div>
                 <div class="card-body">
                     <label class="form-label small mb-0" for="operadorId">Operador declarante</label>
-                    <ejs-dropdownlist id="operadorId" name="operadorId" dataSource="@operadores" placeholder="Escolha…" allowFiltering="true" filterType="Contains">
+                    <ejs-dropdownlist id="operadorId" name="operadorId" dataSource="@operadores" placeholder="Escolha…" allowFiltering="true" filterType="Contains"
+                                      change="dcpOperadorMudou">
                         <e-dropdownlist-fields text="Text" value="Value"></e-dropdownlist-fields>
                     </ejs-dropdownlist>
-                    <label class="form-label small mb-0 mt-2" for="circulacoes">Circulações (opcional)</label>
-                    <textarea id="circulacoes" name="circulacoes" class="form-control form-control-sm font-monospace" rows="2" placeholder="ID TIC ou ID de viagem, separados por vírgula"></textarea>
+                    <label class="form-label small mb-0 mt-2" for="circulacaoIds">Circulações (opcional)</label>
+                    <ejs-multiselect id="circulacaoIds" name="circulacaoIds" dataSource="@(new List<CirculacaoOpcao>())" mode="CheckBox" enabled="false"
+                                     showSelectAll="true" selectAllText="Selecionar todas" unSelectAllText="Desmarcar todas"
+                                     allowFiltering="true" filterBarPlaceholder="Procurar por ID TIC, viagem, linha…" showDropDownIcon="true"
+                                     placeholder="Escolha primeiro o operador" popupHeight="360px">
+                        <e-multiselect-fields text="Text" value="Value" groupBy="Grupo"></e-multiselect-fields>
+                    </ejs-multiselect>
                     <div class="form-text">Fica com o número seguinte de @ano, versão 00.</div>
                 </div>
                 <div class="card-footer"><button class="btn btn-sm btn-primary"><i class="bi bi-plus-lg"></i> Criar</button></div>
@@ -103,6 +109,23 @@
     function dcpExportar(args) {
         if (args.item.id.endsWith('_excelexport'))
             this.excelExport({ fileName: '@($"DCP_{ano}{(vista == "circulacoes" ? "_circulacoes" : "")}.xlsx")' });
+    }
+    // Nova declaração: a lista de circulações passa a ser a do operador escolhido (num grupo, as dos operadores do grupo).
+    async function dcpOperadorMudou(args) {
+        const ms = document.getElementById('circulacaoIds')?.ej2_instances?.[0];
+        if (!ms) return;
+        ms.value = null;
+        if (!args.value) {
+            ms.dataSource = []; ms.placeholder = 'Escolha primeiro o operador'; ms.enabled = false; ms.dataBind();
+            return;
+        }
+        ms.enabled = false; ms.placeholder = 'A carregar…'; ms.dataBind();
+        const r = await fetch('@Url.Action("CirculacoesOperador")?operadorId=' + encodeURIComponent(args.value));
+        const lista = r.ok ? await r.json() : [];
+        ms.dataSource = lista;
+        ms.placeholder = lista.length ? `Circulações do operador (${lista.length})` : 'O operador não tem circulações carregadas';
+        ms.enabled = lista.length > 0;
+        ms.dataBind();
     }
 </script>
 

@@ -99,8 +99,46 @@ public class DeclaracoesController(ApplicationDbContext db, ICurrentUser current
             .FirstOrDefaultAsync(x => x.Id == id);
         if (d is null) return NotFound();
         ViewBag.Circulacoes = (await MembrosAsync(d.Ano, d.Id)).OrderBy(c => c.Partida ?? c.Chegada).ToList();
-        if (currentUser.IsAdmin) ViewBag.Operadores = await OperadoresLookup();
+        if (currentUser.IsAdmin)
+        {
+            ViewBag.Operadores = await OperadoresLookup();
+            ViewBag.CirculacoesOperador = await CirculacoesDoOperadorAsync(d.OperadorId, d.Id);
+        }
         return View(d);
+    }
+
+    /// <summary>Circulações do operador (ou dos operadores do grupo) para a lista de associação ao criar uma declaração.</summary>
+    [Authorize(Roles = Roles.Admin)]
+    public async Task<IActionResult> CirculacoesOperador(int operadorId, int? excluirDeclaracaoId = null) =>
+        Json(await CirculacoesDoOperadorAsync(operadorId, excluirDeclaracaoId));
+
+    /// <summary>
+    /// Circulações carregadas do operador (num grupo, também as dos operadores do grupo), sem as que já estão na declaração
+    /// <paramref name="excluirDeclaracaoId"/>. Sem operador: todas.
+    /// </summary>
+    private async Task<List<CirculacaoOpcao>> CirculacoesDoOperadorAsync(int? operadorId, int? excluirDeclaracaoId)
+    {
+        var q = db.Circulacoes.AsQueryable();
+        if (operadorId is { } op) q = q.Where(c => c.OperadorId == op || c.Operador!.GrupoId == op);
+        if (excluirDeclaracaoId is { } ex) q = q.Where(c => c.DeclaracaoId != ex);
+        var lista = await q.Select(c => new
+        {
+            c.Id, c.ViagemId, c.IdTic, c.LinhaId, c.DesignacaoLinha, c.Chegada, c.Partida, c.IdDcp,
+            Operador = c.Operador!.Abreviatura ?? c.Operador.Designacao
+        }).ToListAsync();
+        var variosOperadores = lista.Select(c => c.Operador).Distinct().Count() > 1;
+        return lista.OrderBy(c => c.IdDcp is null ? 0 : 1).ThenBy(c => c.IdTic ?? c.ViagemId)
+            .Select(c =>
+            {
+                var hora = c.Partida ?? c.Chegada;
+                var partes = new[]
+                {
+                    c.IdTic, c.ViagemId, c.LinhaId is null && c.DesignacaoLinha is null ? null : $"{c.LinhaId} {c.DesignacaoLinha}".Trim(),
+                    hora?.ToString("HH:mm"), variosOperadores ? c.Operador : null
+                };
+                return new CirculacaoOpcao(c.Id, string.Join(" · ", partes.Where(p => !string.IsNullOrWhiteSpace(p))),
+                    c.IdDcp is null ? "Sem declaração" : $"Na declaração {c.IdDcp}");
+            }).ToList();
     }
 
     /// <summary>Renova todas as declarações (com circulações) de um ano para o ano seguinte.</summary>
@@ -140,7 +178,7 @@ public class DeclaracoesController(ApplicationDbContext db, ICurrentUser current
 
     /// <summary>Nova declaração (número seguinte no ano), opcionalmente já com circulações (ID de viagem ou ID TIC).</summary>
     [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = Roles.Admin)]
-    public async Task<IActionResult> Criar(int operadorId, string? circulacoes)
+    public async Task<IActionResult> Criar(int operadorId, string? circulacoes, int[]? circulacaoIds)
     {
         // As novas declarações ficam sempre no ano em vigor (o mais recente).
         var operador = await db.Operadores.FindAsync(operadorId);
@@ -151,7 +189,7 @@ public class DeclaracoesController(ApplicationDbContext db, ICurrentUser current
         }
         var d = await numeracao.NovaDeclaracaoAsync(operador, "Criada no backoffice.");
         await db.SaveChangesAsync();
-        var (associadas, erros) = await AssociarAsync(d, circulacoes);
+        var (associadas, erros) = await AssociarAsync(d, circulacoes, circulacaoIds);
         await log.LogAsync(CategoriaRegisto.Dados, "Declaração", $"Nova declaração {d.Codigo}" + (associadas.Count > 0 ? $" com {string.Join(", ", associadas)}." : "."));
         TempData["Ok"] = $"Criada a declaração {d.Codigo}" + (associadas.Count > 0 ? $" com {associadas.Count} circulação(ões)." : ".");
         if (erros.Count > 0) TempData["Erro"] = string.Join(" ", erros);
@@ -162,14 +200,34 @@ public class DeclaracoesController(ApplicationDbContext db, ICurrentUser current
     /// Associa à declaração as circulações indicadas (ID de viagem ou ID TIC, separados por vírgula, espaço ou linha).
     /// Uma circulação que estava noutra declaração passa para esta.
     /// </summary>
-    private async Task<(List<string> Associadas, List<string> Erros)> AssociarAsync(Declaracao d, string? codigos)
+    private async Task<(List<string> Associadas, List<string> Erros)> AssociarAsync(Declaracao d, string? codigos, int[]? circulacaoIds = null)
     {
         var lista = (codigos ?? "").Split([',', ';', ' ', '\n', '\r', '\t'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Distinct().ToList();
+        var ids = (circulacaoIds ?? []).Distinct().ToList();
         var associadas = new List<string>();
         var erros = new List<string>();
-        if (lista.Count == 0) return (associadas, erros);
-        var candidatas = await db.Circulacoes.Where(c => lista.Contains(c.ViagemId) || (c.IdTic != null && lista.Contains(c.IdTic))).ToListAsync();
+        if (lista.Count == 0 && ids.Count == 0) return (associadas, erros);
+
+        async Task Associar(Circulacao c)
+        {
+            if (c.DeclaracaoId == d.Id) return;
+            var anterior = c.IdDcp;
+            c.DeclaracaoId = d.Id;
+            c.IdDcp = d.Codigo;
+            associadas.Add(c.ViagemId);
+            await log.LogAsync(CategoriaRegisto.Dados, "Declaração",
+                $"Circulação {c.ViagemId} associada à declaração {d.Codigo}" + (anterior is null ? "." : $" (antes {anterior})."), ownerId: c.OwnerId);
+        }
+
+        // Escolhidas na lista (por id).
+        var porId = await db.Circulacoes.Where(c => ids.Contains(c.Id)).ToListAsync();
+        if (porId.Count < ids.Count) erros.Add($"{ids.Count - porId.Count} circulação(ões) escolhida(s) já não existe(m).");
+        foreach (var c in porId) await Associar(c);
+
+        // Indicadas por código (ID TIC ou ID de viagem).
+        var candidatas = lista.Count == 0 ? []
+            : await db.Circulacoes.Where(c => lista.Contains(c.ViagemId) || (c.IdTic != null && lista.Contains(c.IdTic))).ToListAsync();
         foreach (var codigo in lista)
         {
             var porTic = candidatas.Where(c => c.IdTic == codigo).ToList();
@@ -179,14 +237,7 @@ public class DeclaracoesController(ApplicationDbContext db, ICurrentUser current
                 erros.Add(encontradas.Count == 0 ? $"\"{codigo}\" não encontrada." : $"\"{codigo}\" é ambíguo ({encontradas.Count} circulações): use o ID TIC.");
                 continue;
             }
-            var c = encontradas[0];
-            if (c.DeclaracaoId == d.Id) continue;
-            var anterior = c.IdDcp;
-            c.DeclaracaoId = d.Id;
-            c.IdDcp = d.Codigo;
-            associadas.Add(c.ViagemId);
-            await log.LogAsync(CategoriaRegisto.Dados, "Declaração",
-                $"Circulação {c.ViagemId} associada à declaração {d.Codigo}" + (anterior is null ? "." : $" (antes {anterior})."), ownerId: c.OwnerId);
+            await Associar(encontradas[0]);
         }
         await db.SaveChangesAsync();
         return (associadas, erros);
@@ -226,12 +277,13 @@ public class DeclaracoesController(ApplicationDbContext db, ICurrentUser current
 
     /// <summary>Associa circulações (ID de viagem ou ID TIC; várias separadas por vírgula) à declaração.</summary>
     [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = Roles.Admin)]
-    public async Task<IActionResult> AdicionarCirculacao(int id, string? codigo)
+    public async Task<IActionResult> AdicionarCirculacao(int id, string? codigo, int[]? circulacaoIds)
     {
         if (await EncerradaAsync(id)) return RedirectToAction(nameof(Details), new { id });
         var d = await db.Declaracoes.FindAsync(id);
         if (d is null) return NotFound();
-        var (associadas, erros) = await AssociarAsync(d, codigo);
+        var (associadas, erros) = await AssociarAsync(d, codigo, circulacaoIds);
+        if (associadas.Count == 0 && erros.Count == 0) TempData["Erro"] = "Escolha pelo menos uma circulação.";
         if (associadas.Count > 0) TempData["Ok"] = $"Associada(s) à declaração: {string.Join(", ", associadas)}.";
         if (erros.Count > 0) TempData["Erro"] = string.Join(" ", erros);
         return RedirectToAction(nameof(Details), new { id });

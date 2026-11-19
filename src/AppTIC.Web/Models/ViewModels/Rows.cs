@@ -51,3 +51,6 @@ public record IdTicProblemaRow(int Id, string ViagemId, string? IdTic, string Op
 public record DeclaracaoAnoCirculacaoRow(int DeclaracaoId, string Codigo, int Ano, string? Declarante, string Estado, int CirculacaoId,
     string ViagemId, string? IdTic, string Operador, string? LinhaId, string? DesignacaoLinha, string? Origem, string? Destino,
     string? Chegada, string? Partida, DateTime? Primeiro, DateTime? Ultimo);
+
+/// <summary>Opção da lista de circulações a associar a uma declaração (agrupadas pela declaração atual).</summary>
+public record CirculacaoOpcao(int Value, string Text, string Grupo);

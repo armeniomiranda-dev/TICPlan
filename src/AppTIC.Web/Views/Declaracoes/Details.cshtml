@@ -4,6 +4,7 @@
     var isAdmin = User.IsInRole(Roles.Admin);
     var circulacoes = (List<DeclaracaoAnoCirculacaoRow>)ViewBag.Circulacoes;
     var operadores = ViewBag.Operadores as List<LookupItem> ?? [];
+    var circulacoesOperador = ViewBag.CirculacoesOperador as List<CirculacaoOpcao> ?? [];
     var encerrada = Model.Renovacao is not null;
     // Só se gere uma declaração em vigor (as renovadas ficam para consulta).
     var gerir = isAdmin && !encerrada;
@@ -81,10 +82,23 @@
             </div>
             @if (gerir)
             {
-                <form asp-action="AdicionarCirculacao" asp-route-id="@Model.Id" method="post" class="card-footer d-flex gap-2 align-items-center">
-                    <input name="codigo" class="form-control form-control-sm" style="max-width: 360px" placeholder="ID TIC ou ID de viagem (vários: separe por vírgula)" />
-                    <button class="btn btn-sm btn-outline-primary"><i class="bi bi-plus-lg"></i> Associar circulação</button>
-                    <span class="small text-muted">Uma circulação que esteja noutra declaração passa para esta.</span>
+                <form asp-action="AdicionarCirculacao" asp-route-id="@Model.Id" method="post" class="card-footer">
+                    <div class="d-flex gap-2 align-items-center">
+                        <div class="flex-grow-1">
+                            <ejs-multiselect id="circulacaoIds" name="circulacaoIds" dataSource="@circulacoesOperador" mode="CheckBox"
+                                             showSelectAll="true" selectAllText="Selecionar todas" unSelectAllText="Desmarcar todas"
+                                             allowFiltering="true" filterBarPlaceholder="Procurar por ID TIC, viagem, linha…" showDropDownIcon="true"
+                                             placeholder="@(circulacoesOperador.Count == 0 ? "Sem circulações do operador por associar" : $"Circulações de {Model.Operador?.Abreviatura ?? Model.Operador?.Designacao ?? "todos os operadores"} ({circulacoesOperador.Count})")"
+                                             popupHeight="360px">
+                                <e-multiselect-fields text="Text" value="Value" groupBy="Grupo"></e-multiselect-fields>
+                            </ejs-multiselect>
+                        </div>
+                        <button class="btn btn-sm btn-outline-primary text-nowrap"><i class="bi bi-plus-lg"></i> Associar circulação</button>
+                    </div>
+                    <div class="small text-muted mt-1">
+                        @(Model.OperadorId is null ? "Sem declarante: lista todas as circulações." : "Lista as circulações carregadas do declarante (num grupo, as dos operadores do grupo).")
+                        Uma circulação que esteja noutra declaração passa para esta.
+                    </div>
                 </form>
             }
         </div>
