@@ -3,7 +3,7 @@ namespace AppTIC.Web.Models.ViewModels;
 // Linhas planas para as grelhas Syncfusion (sem navegações, para serializar sem ciclos).
 
 public record OperadorRow(int Id, string Nif, string Designacao, string? Abreviatura, string? Alvara,
-    DateTime? AlvaraValidade, string? Ambito, int NumCirculacoes, string? Dono);
+    DateTime? AlvaraValidade, string? Ambito, int NumCirculacoes, string? Dono, string? Grupo = null, string? NumeracaoIdTic = null, string? Cor = null);
 
 public record ParagemRow(int Id, string Codigo, string Nome, decimal? Latitude, decimal? Longitude, string? Comentarios, string? Dono);
 
@@ -31,5 +31,23 @@ public static class DateOnlyExtensions
     public static DateTime? ToDateTime(this DateOnly? d) => d?.ToDateTime(TimeOnly.MinValue);
 }
 
-public record PedidoRow(int Id, int CirculacaoId, string ViagemId, string Operador, string Descricao, string Estado,
+public record PedidoRow(int Id, string Tipo, int? CirculacaoId, string ViagemId, string Operador, string Descricao, string Estado,
     string? PedidoPor, DateTime CriadoEm, DateTime? RespondidoEm);
+
+public record DeclaracaoRow(int Id, string Codigo, int Ano, int Numero, int Versao, string? Declarante, string Operadores,
+    int NumCirculacoes, DateTime CriadoEm, DateTime AtualizadoEm, string Estado = "Em vigor", string? Anterior = null);
+
+public record DeclaracaoCirculacaoRow(int Id, string ViagemId, string? IdTic, string Operador, string? LinhaId, string? DesignacaoLinha,
+    TimeOnly? Chegada, TimeOnly? Partida, DateOnly? Primeiro, DateOnly? Ultimo);
+
+/// <summary>Numeração do ID TIC de um operador ou grupo com prefixo.</summary>
+public record NumeracaoIdTicRow(int OperadorId, string Operador, bool EGrupo, string? Membros, int Prefixo, string Intervalo,
+    int Utilizados, string? Ultimo, string? Proximo, int Livres, int SemIdTic);
+
+/// <summary>Circulação com ID TIC fora da numeração do seu operador, ou repetido.</summary>
+public record IdTicProblemaRow(int Id, string ViagemId, string? IdTic, string Operador, string Problema);
+
+/// <summary>Circulação de uma declaração num ano (para consulta e exportação para Excel).</summary>
+public record DeclaracaoAnoCirculacaoRow(int DeclaracaoId, string Codigo, int Ano, string? Declarante, string Estado, int CirculacaoId,
+    string ViagemId, string? IdTic, string Operador, string? LinhaId, string? DesignacaoLinha, string? Origem, string? Destino,
+    string? Chegada, string? Partida, DateTime? Primeiro, DateTime? Ultimo);

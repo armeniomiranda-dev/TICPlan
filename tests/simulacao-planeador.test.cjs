@@ -60,3 +60,32 @@ test('liberta um cais antes de outra chegada no mesmo instante', () => {
     assert.equal(resultado.get('a'), 9);
     assert.equal(resultado.get('b'), 9);
 });
+
+test('zonamento por permanência: categoria pela duração e cais pela distância à saída', () => {
+    const { esquemasPorOmissao, categoriaPorPermanencia, opcoes, pedido, ORDEM_SAIDA } =
+        require('../src/AppTIC.Web/wwwroot/js/simulacao-planeador.js');
+    const esquema = esquemasPorOmissao().Permanencia;
+    assert.deepEqual([2, 5, 5.5, 10, 45].map(m => categoriaPorPermanencia(esquema, m)),
+        ['Rapida', 'Rapida', 'Intermedia', 'Intermedia', 'Espera']);
+    assert.deepEqual(opcoes(esquema, 'Rapida').primarios, ORDEM_SAIDA.slice(0, 6));
+    assert.deepEqual(opcoes(esquema, 'Rapida').reserva, ORDEM_SAIDA.slice(6, 11));
+    assert.deepEqual(opcoes(esquema, 'Espera').primarios, ORDEM_SAIDA.slice(11).reverse());
+    assert.equal(opcoes(esquema, 'Espera').outros.length, 6);
+
+    const corpo = pedido(esquema, []);
+    assert.deepEqual(corpo.Categorias.flatMap(c => c.Cais).sort((a, b) => a - b), Array.from({ length: 17 }, (_, i) => i + 1));
+    assert.deepEqual(corpo.OrdemSaida, ORDEM_SAIDA);
+
+    // Regra provisória: a paragem rápida fica no cais mais próximo da saída e a espera no mais distante.
+    const resultado = alocar([viagem('r', 'Rapida', 0, 120), viagem('e', 'Espera', 0, 3600)], esquema);
+    assert.equal(resultado.get('r'), 9);
+    assert.equal(resultado.get('e'), 1);
+});
+
+test('em último recurso usa cais de outra categoria; sem ele fica sem cais', () => {
+    const { esquemasPorOmissao } = require('../src/AppTIC.Web/wwwroot/js/simulacao-planeador.js');
+    const esquema = esquemasPorOmissao().Permanencia;
+    const rapidas = Array.from({ length: 12 }, (_, i) => viagem('r' + String(i).padStart(2, '0'), 'Rapida', 0, 100));
+    assert.equal(alocar(rapidas, esquema).get('r11'), 16);
+    assert.equal(alocar(rapidas, { ...esquema, ultimoRecurso: false }).get('r11'), null);
+});

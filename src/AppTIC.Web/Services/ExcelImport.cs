@@ -24,7 +24,7 @@ public record ExcelImportResultado(int OperadoresNovos, int ParagensNovas, int P
 /// Importa operadores, paragens, circulações (com percurso) e calendário a partir da folha Excel de planeamento.
 /// Operador ↔ NIF; Paragem ↔ paragem_id (Código); Circulação ↔ viagem_id (ID de viagem). Voltar a importar atualiza os existentes.
 /// </summary>
-public class ExcelImportService(ApplicationDbContext db, IOptions<GtfsOptions> options, IActivityLog log)
+public class ExcelImportService(ApplicationDbContext db, IOptions<GtfsOptions> options, IActivityLog log, NumeracaoService numeracao)
 {
     private const int MaxConflitos = 50;
 
@@ -126,6 +126,9 @@ public class ExcelImportService(ApplicationDbContext db, IOptions<GtfsOptions> o
 
         // 4) Circulações, percurso e calendário
         int novas = 0, totalDias = 0;
+        // Declarações (id_DCP): Ano.Numero.Versao; sem ano no ficheiro, vale o ano do calendário da folha.
+        var anoDcp = dados.Inicio?.Year ?? hoje.Year;
+        var declaracoes = new Dictionary<(int, int), Declaracao>();
         var ticPorOperador = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
         foreach (var (x, existente, _) in aImportar)
         {
@@ -144,7 +147,16 @@ public class ExcelImportService(ApplicationDbContext db, IOptions<GtfsOptions> o
             c.Autorizacao = x.Autorizacao;
             c.AutorizacaoValidade = x.AutorizacaoValidade;
             c.DeclaracaoCapacidade = x.DeclaracaoCapacidade;
-            c.IdDcp = x.IdDcp;
+            if (await numeracao.DeclaracaoDoFicheiroAsync(x.IdDcp, anoDcp, operador,
+                    $"Importação Excel #{importacao.Id} ({importacao.NomeFicheiro})", declaracoes, ct) is { } dcp)
+                c.Declaracao = dcp;
+            else if (x.IdDcp is not null)
+            {
+                // Texto que não é Ano.Numero.Versao: fica como está, sem declaração.
+                c.Declaracao = null;
+                c.DeclaracaoId = null;
+                c.IdDcp = x.IdDcp;
+            }
             c.IdTic = x.IdTic;
             c.Origem = x.OrigemCodigo is null ? null : plano.Paragens[x.OrigemCodigo];
             c.Destino = x.DestinoCodigo is null ? null : plano.Paragens[x.DestinoCodigo];
@@ -170,6 +182,9 @@ public class ExcelImportService(ApplicationDbContext db, IOptions<GtfsOptions> o
             }
         }
 
+        foreach (var e in db.ChangeTracker.Entries<Circulacao>().Where(e => e.Entity.Declaracao is not null))
+            e.Entity.IdDcp = e.Entity.Declaracao!.Codigo;
+
         importacao.Estado = ImportacaoEstado.Aplicada;
         importacao.AplicadaEm = DateTime.UtcNow;
         importacao.Aplicacoes++;
@@ -180,6 +195,8 @@ public class ExcelImportService(ApplicationDbContext db, IOptions<GtfsOptions> o
         importacao.NumCirculacoes = aImportar.Count;
         importacao.NumDias = totalDias;
         await db.SaveChangesAsync(ct);
+        // Outras circulações das mesmas declarações (de outros lotes) ficam com a versão atual.
+        foreach (var d in declaracoes.Values) await numeracao.SincronizarCodigoAsync(d, ct);
 
         // 5) Circulações desta importação que já não constam do ficheiro
         var removidas = 0;
@@ -204,8 +221,8 @@ public class ExcelImportService(ApplicationDbContext db, IOptions<GtfsOptions> o
     private async Task<Plano> PlanearAsync(string ownerId, ExcelDados dados, bool seguir, CancellationToken ct)
     {
         var nifs = dados.Circulacoes.Select(c => c.Nif).Where(n => n.Length > 0).Distinct().ToList();
-        var operadores = (await Seguir(db.Operadores.Where(o => o.OwnerId == ownerId && nifs.Contains(o.Nif)), seguir).ToListAsync(ct))
-            .ToDictionary(o => o.Nif, StringComparer.OrdinalIgnoreCase);
+        var operadores = (await Seguir(db.Operadores.Where(o => o.OwnerId == ownerId && nifs.Contains(o.Nif!)), seguir).ToListAsync(ct))
+            .ToDictionary(o => o.Nif!, StringComparer.OrdinalIgnoreCase);
 
         var codigos = dados.Paragens.Keys
             .Concat(dados.Circulacoes.SelectMany(c => c.Percurso.Append(c.OrigemCodigo).Append(c.DestinoCodigo)).Where(p => p is not null).Select(p => p!))

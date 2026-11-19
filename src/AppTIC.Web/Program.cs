@@ -71,6 +71,8 @@ builder.Services.AddScoped<GtfsDbLoader>();
 builder.Services.AddScoped<GtfsImportService>();
 builder.Services.AddScoped<ImportacaoService>();
 builder.Services.AddScoped<ExcelImportService>();
+builder.Services.AddScoped<NumeracaoService>();
+builder.Services.AddScoped<ExportacaoPlaneamento>();
 builder.Services.AddScoped<OcupacaoTerminal>();
 builder.Services.AddScoped<SimulacaoService>();
 builder.Services.AddSingleton<ICaisService, CaisService>();
@@ -120,7 +122,8 @@ app.MapControllerRoute(
     pattern: "{controller=Home}/{action=Index}/{id?}")
     .WithStaticAssets();
 
-var terminalApi = app.MapGroup("/api/terminal").RequireAuthorization();
+// API do terminal (simulação): só para o Admin.
+var terminalApi = app.MapGroup("/api/terminal").RequireAuthorization(p => p.RequireRole(Roles.Admin));
 terminalApi.AddEndpointFilter(async (context, next) =>
 {
     if (!HttpMethods.IsGet(context.HttpContext.Request.Method))
@@ -157,13 +160,12 @@ terminalApi.MapPost("/alocar-preview", (IReadOnlyList<AutocarroDto> pedidos, ICa
         : Results.Ok(resultado.OrderBy(a => a.Cais));
 });
 
-terminalApi.MapPost("/planear-dia", (IReadOnlyList<AutocarroDto> pedidos, ICaisService solver) =>
+terminalApi.MapPost("/planear-dia", (PlaneamentoPedido pedido, ICaisService solver) =>
 {
-    if (pedidos.Any(p => string.IsNullOrWhiteSpace(p.AutocarroId) || !Enum.IsDefined(p.Zona) || p.ChegadaMinutos >= p.PartidaMinutos) ||
-        pedidos.Select(p => p.AutocarroId).Distinct(StringComparer.Ordinal).Count() != pedidos.Count)
-        return Results.BadRequest(new { Mensagem = "Existem pedidos inválidos ou repetidos no planeamento do dia." });
+    if (CaisService.Validar(pedido) is { } erro)
+        return Results.BadRequest(new { Mensagem = erro });
 
-    var resultado = solver.PlanearDia(pedidos);
+    var resultado = solver.PlanearDia(pedido);
     return resultado is null
         ? Results.Conflict(new { Mensagem = "Os cais fixos (autocarros já atracados) sobrepõem-se; não é possível planear." })
         : Results.Ok(resultado);

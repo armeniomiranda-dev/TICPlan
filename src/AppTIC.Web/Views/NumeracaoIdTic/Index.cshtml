@@ -1,0 +1,112 @@
+@model List<NumeracaoIdTicRow>
+@{
+    ViewData["Title"] = "Numeração do ID TIC";
+    var problemas = (List<IdTicProblemaRow>)ViewBag.Problemas;
+    var semPrefixo = (List<(int Id, string Nome, bool EGrupo, int Sem)>)ViewBag.SemPrefixo;
+}
+<div class="page-header">
+    <h1>Numeração do ID TIC</h1>
+    <a class="btn btn-outline-secondary" asp-controller="Operadores" asp-action="Index"><i class="bi bi-building"></i> Operadores</a>
+</div>
+
+<p class="small text-muted">ID TIC = prefixo do operador seguido de 3 dígitos sequenciais (ex.: prefixo 8 → 8001, 8002, …, 8999; prefixo 11 → 11001…).
+    Num operador de um grupo vale o prefixo do grupo. As novas circulações (criadas pelo Admin ou por pedido aceite) recebem o número seguinte.</p>
+
+<div class="card mb-3">
+    <div class="card-header"><i class="bi bi-123"></i> Prefixos atribuídos</div>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle small mb-0">
+            <thead>
+                <tr><th>Prefixo</th><th>Operador / grupo</th><th>Intervalo</th><th class="text-end">Utilizados</th><th>Último</th><th>Próximo</th>
+                    <th class="text-end">Livres</th><th class="text-end">Sem ID TIC</th><th style="width: 260px"></th></tr>
+            </thead>
+            <tbody>
+                @foreach (var l in Model)
+                {
+                    var uso = (int)Math.Round(100.0 * (999 - l.Livres) / 999);
+                    <tr>
+                        <td class="fw-bold font-monospace">@(l.Prefixo)XXX</td>
+                        <td>
+                            <a asp-controller="Operadores" asp-action="Edit" asp-route-id="@l.OperadorId">@l.Operador</a>
+                            @if (l.EGrupo) { <span class="badge text-bg-info">grupo</span> }
+                            @if (l.Membros is not null) { <div class="text-muted">@l.Membros</div> }
+                        </td>
+                        <td class="font-monospace text-nowrap">@l.Intervalo</td>
+                        <td class="text-end">@l.Utilizados</td>
+                        <td class="font-monospace">@(l.Ultimo ?? "–")</td>
+                        <td class="font-monospace fw-semibold">@(l.Proximo ?? "esgotado")</td>
+                        <td class="text-end">
+                            @l.Livres
+                            <div class="progress mt-1" style="height: 4px" title="@uso% utilizado"><div class="progress-bar @(uso > 90 ? "bg-danger" : uso > 70 ? "bg-warning" : "")" style="width: @uso%"></div></div>
+                        </td>
+                        <td class="text-end">
+                            @if (l.SemIdTic > 0)
+                            {
+                                <form asp-action="AtribuirEmFalta" asp-route-operadorId="@l.OperadorId" method="post" class="d-inline"
+                                      onsubmit="return confirm('Atribuir ID TIC às @l.SemIdTic circulação(ões) sem ID TIC?')">
+                                    <button class="btn btn-sm btn-link p-0">@l.SemIdTic — atribuir</button>
+                                </form>
+                            }
+                            else { <span class="text-muted">0</span> }
+                        </td>
+                        <td>
+                            <form asp-action="DefinirPrefixo" method="post" class="d-flex gap-1">
+                                <input type="hidden" name="operadorId" value="@l.OperadorId" />
+                                <input type="number" name="prefixo" min="1" max="999" value="@l.Prefixo" class="form-control form-control-sm" style="width: 80px" />
+                                <button class="btn btn-sm btn-outline-primary">Alterar</button>
+                                <button class="btn btn-sm btn-outline-danger" name="prefixo" value="" title="Retirar prefixo"
+                                        onclick="return confirm('Retirar o prefixo? Os ID TIC já atribuídos mantêm-se.')"><i class="bi bi-x-lg"></i></button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+                @if (Model.Count == 0) { <tr><td colspan="9" class="text-muted">Nenhum operador tem prefixo de ID TIC.</td></tr> }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-5">
+        <div class="card h-100">
+            <div class="card-header">Operadores sem prefixo</div>
+            <ul class="list-group list-group-flush small">
+                @foreach (var o in semPrefixo)
+                {
+                    <li class="list-group-item">
+                        <form asp-action="DefinirPrefixo" method="post" class="d-flex gap-2 align-items-center">
+                            <input type="hidden" name="operadorId" value="@o.Id" />
+                            <span class="flex-grow-1">@o.Nome @if (o.EGrupo) { <span class="badge text-bg-info">grupo</span> }
+                                @if (o.Sem > 0) { <span class="text-muted">(@o.Sem sem ID TIC)</span> }</span>
+                            <input type="number" name="prefixo" min="1" max="999" class="form-control form-control-sm" style="width: 80px" placeholder="ex.: 8" />
+                            <button class="btn btn-sm btn-outline-primary">Definir</button>
+                        </form>
+                    </li>
+                }
+                @if (semPrefixo.Count == 0) { <li class="list-group-item text-muted">Todos os operadores têm numeração.</li> }
+            </ul>
+        </div>
+    </div>
+    <div class="col-lg-7">
+        <div class="card h-100">
+            <div class="card-header"><i class="bi bi-exclamation-triangle"></i> ID TIC a rever <span class="badge text-bg-@(problemas.Count > 0 ? "warning" : "success")">@problemas.Count</span></div>
+            <div class="table-responsive" style="max-height: 420px">
+                <table class="table table-sm align-middle small mb-0">
+                    <thead><tr><th>ID TIC</th><th>Circulação</th><th>Operador</th><th>Problema</th></tr></thead>
+                    <tbody>
+                        @foreach (var p in problemas)
+                        {
+                            <tr>
+                                <td class="font-monospace">@p.IdTic</td>
+                                <td><a asp-controller="Circulacoes" asp-action="Edit" asp-route-id="@p.Id">@p.ViagemId</a></td>
+                                <td>@p.Operador</td>
+                                <td>@p.Problema</td>
+                            </tr>
+                        }
+                        @if (problemas.Count == 0) { <tr><td colspan="4" class="text-muted">Sem problemas.</td></tr> }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>

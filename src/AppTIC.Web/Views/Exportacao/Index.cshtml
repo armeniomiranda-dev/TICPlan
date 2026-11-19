@@ -1,0 +1,109 @@
+@model List<LinhaPlaneamento>
+@{
+    ViewData["Title"] = "Exportação do planeamento";
+    var periodo = (PeriodoExportacao)ViewBag.Periodo;
+    var data = (DateOnly)ViewBag.Data;
+    var ate = (DateOnly)ViewBag.Ate;
+    var de = (DateOnly)ViewBag.De;
+    var fim = (DateOnly)ViewBag.Fim;
+    var operadorId = (int?)ViewBag.OperadorId;
+    var cais = (bool)ViewBag.Cais;
+    var ver = (bool)ViewBag.Ver;
+    var operadores = (List<OperadorOuGrupoItem>)ViewBag.Operadores;
+    var periodos = new[]
+    {
+        (PeriodoExportacao.Diario, "Diário"), (PeriodoExportacao.Semanal, "Semanal (seg–dom)"), (PeriodoExportacao.Mensal, "Mensal"),
+        (PeriodoExportacao.Anual, "Anual"), (PeriodoExportacao.Personalizado, "Intervalo de datas")
+    };
+    var dias = fim.DayNumber - de.DayNumber + 1;
+    var query = new Dictionary<string, string?>
+    {
+        ["periodo"] = periodo.ToString(), ["data"] = data.ToString("yyyy-MM-dd"), ["ate"] = ate.ToString("yyyy-MM-dd"),
+        ["operadorId"] = operadorId?.ToString(), ["cais"] = cais ? "true" : null
+    };
+}
+<div class="page-header">
+    <h1>Exportação do planeamento</h1>
+</div>
+
+<form method="get" class="card card-form mb-3" id="formExportacao">
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label" for="periodo">Período</label>
+                <select class="form-select" id="periodo" name="periodo" onchange="mostrarAte()">
+                    @foreach (var (v, t) in periodos) { <option value="@v" selected="@(v == periodo)">@t</option> }
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label" for="data" id="lblData">@(periodo == PeriodoExportacao.Personalizado ? "De" : "Data")</label>
+                <input type="date" class="form-control" id="data" name="data" value="@data.ToString("yyyy-MM-dd")" />
+            </div>
+            <div class="col-md-2" id="colAte">
+                <label class="form-label" for="ate">Até</label>
+                <input type="date" class="form-control" id="ate" name="ate" value="@ate.ToString("yyyy-MM-dd")" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label" for="operadorId">Operador ou grupo</label>
+                <ejs-dropdownlist id="operadorId" name="operadorId" dataSource="@operadores" value="@operadorId?.ToString()" placeholder="Todos"
+                                  allowFiltering="true" filterType="Contains" showClearButton="true">
+                    <e-dropdownlist-fields text="Text" value="Value" groupBy="Tipo"></e-dropdownlist-fields>
+                </ejs-dropdownlist>
+            </div>
+            <div class="col-md-2">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="cais" name="cais" value="true" checked="@cais" />
+                    <label class="form-check-label" for="cais">Calcular cais</label>
+                </div>
+                <div class="form-text mt-0">Até @AppTIC.Web.Controllers.ExportacaoController.MaxDiasCais dias.</div>
+            </div>
+        </div>
+        <p class="small text-muted mt-3 mb-0">
+            Período: <strong>@de.ToString("dd/MM/yyyy")</strong> a <strong>@fim.ToString("dd/MM/yyyy")</strong> (@dias dia(s)).
+            Uma linha por circulação e dia de saída do terminal: <code>Data</code> = data de saída, <code>HoraE</code> = entrada, <code>Hora</code> = saída.
+            Formato do ficheiro <code>Horarios.csv</code> (separador <code>;</code>, ISO-8859-1), sem as colunas <code>periodo</code> e <code>DataInicio</code>.
+        </p>
+    </div>
+    <div class="card-footer d-flex gap-2">
+        <button type="submit" name="ver" value="true" class="btn btn-outline-primary"><i class="bi bi-eye"></i> Pré-visualizar</button>
+        <a class="btn btn-primary" asp-action="Csv" asp-all-route-data="query" id="btnCsv"><i class="bi bi-filetype-csv"></i> Exportar CSV</a>
+    </div>
+</form>
+
+@if (ver)
+{
+    <div class="card">
+        <div class="card-header">Pré-visualização <span class="text-muted small">(primeiras @Model.Count linhas)</span></div>
+        <div class="table-responsive">
+            <table class="table table-sm table-striped small mb-0 text-nowrap">
+                <thead><tr>@foreach (var c in ExportacaoPlaneamento.Colunas) { <th>@c</th> }</tr></thead>
+                <tbody>
+                    @foreach (var l in Model)
+                    {
+                        <tr>@foreach (var v in ExportacaoPlaneamento.Campos(l)) { <td>@v</td> }</tr>
+                    }
+                    @if (Model.Count == 0) { <tr><td colspan="@ExportacaoPlaneamento.Colunas.Length" class="text-muted">Sem circulações no período.</td></tr> }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@section Scripts {
+    <script>
+        function mostrarAte() {
+            const personalizado = document.getElementById('periodo').value === 'Personalizado';
+            document.getElementById('colAte').classList.toggle('d-none', !personalizado);
+            document.getElementById('lblData').textContent = personalizado ? 'De' : 'Data';
+        }
+        mostrarAte();
+        // O botão de exportação usa os valores atuais do formulário.
+        document.getElementById('btnCsv').addEventListener('click', e => {
+            e.preventDefault();
+            const form = document.getElementById('formExportacao');
+            const params = new URLSearchParams(new FormData(form));
+            if (!params.get('operadorId')) params.delete('operadorId');
+            location.href = '@Url.Action("Csv")?' + params.toString();
+        });
+    </script>
+}

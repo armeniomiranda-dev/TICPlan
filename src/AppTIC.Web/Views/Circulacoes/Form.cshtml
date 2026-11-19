@@ -63,8 +63,24 @@
                 <input type="hidden" name="DeclaracaoCapacidade" value="false" />
             </div>
             <div class="col-md-3">
-                <label asp-for="IdDcp" class="form-label"></label>
-                <input asp-for="IdDcp" class="form-control" />
+                <label class="form-label">Declaração (DCP) associada</label>
+                @if (Model.Id == 0)
+                {
+                    <input class="form-control" placeholder="nova declaração (automático)" readonly />
+                }
+                else if (Model.DeclaracaoId is { } dcpId)
+                {
+                    <div class="input-group">
+                        <input class="form-control font-monospace" value="@Model.IdDcp" readonly />
+                        <a class="btn btn-outline-secondary" asp-controller="Declaracoes" asp-action="Details" asp-route-id="@dcpId" title="Abrir a declaração"><i class="bi bi-box-arrow-up-right"></i></a>
+                    </div>
+                }
+                else
+                {
+                    <input class="form-control" placeholder="sem declaração" readonly />
+                    @if (!string.IsNullOrWhiteSpace(Model.IdDcp)) { <div class="form-text">No ficheiro: @Model.IdDcp</div> }
+                }
+                <div class="form-text">A associação faz-se em <a asp-controller="Declaracoes" asp-action="Index">DCP</a>.</div>
             </div>
         </div>
 
@@ -77,7 +93,8 @@
             </div>
             <div class="col-md-3">
                 <label asp-for="IdTic" class="form-label"></label>
-                <input asp-for="IdTic" class="form-control" />
+                <input class="form-control font-monospace" value="@Model.IdTic" placeholder="@(Model.Id == 0 ? "gerado ao criar" : "sem ID TIC")" readonly />
+                <div class="form-text">Gerado pela numeração do operador (ou grupo).</div>
             </div>
             <div class="col-md-3">
                 <label asp-for="OrigemId" class="form-label"></label>

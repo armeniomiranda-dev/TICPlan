@@ -104,7 +104,7 @@ public class ImportacoesController(ApplicationDbContext db, ImportacaoService im
         vm.Feeds = feeds.Select(f => new LookupItem(f.Id.ToString(), $"{f.Operador} – {f.Nome} ({f.CriadoEm.ToLocalTime():dd/MM/yyyy})")).ToList();
 
         var nifs = dados.Circulacoes.Select(c => c.Nif).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var escolhido = feedId ?? feeds.FirstOrDefault(f => nifs.Contains(f.Nif))?.Id;
+        var escolhido = feedId ?? feeds.FirstOrDefault(f => f.Nif != null && nifs.Contains(f.Nif))?.Id;
         if (escolhido is null || feeds.All(f => f.Id != escolhido)) return;
 
         var feed = await db.GtfsFeeds.Include(f => f.Operador).FirstAsync(f => f.Id == escolhido, ct);

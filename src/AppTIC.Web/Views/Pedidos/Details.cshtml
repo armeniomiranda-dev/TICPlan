@@ -2,28 +2,69 @@
 @{
     ViewData["Title"] = $"Pedido #{Model.Id}";
     var isAdmin = User.IsInRole(Roles.Admin);
-    var c = Model.Circulacao!;
+    var c = Model.Circulacao;
     string H(TimeOnly? t) => t?.ToString("HH:mm") ?? "–";
     string D(DateOnly? d) => d?.ToString("dd/MM/yyyy") ?? "–";
     var badge = Model.Estado switch { EstadoPedido.Pendente => "text-bg-warning", EstadoPedido.Aceite => "text-bg-success", _ => "text-bg-secondary" };
+    var nomesDias = new Dictionary<int, string> { [1] = "Seg", [2] = "Ter", [3] = "Qua", [4] = "Qui", [5] = "Sex", [6] = "Sáb", [0] = "Dom" };
+    var semana = Model.DiasSemanaLista();
+    var podeAplicar = Model.Tipo switch
+    {
+        TipoPedido.Alteracao => Model.DataInicio is not null && (Model.NovaChegada is not null || Model.NovaPartida is not null),
+        _ => true
+    };
+    var textoAplicar = Model.Tipo switch
+    {
+        TipoPedido.NovaCirculacao => "Criar a circulação (novo ID TIC e nova declaração DCP)",
+        TipoPedido.Remocao => $"Retirar do calendário os dias a partir de {D(Model.DataInicio)} (nova versão da declaração)",
+        _ => "Aplicar as horas pedidas no período (nova versão da declaração)"
+    };
 }
 <div class="page-header">
-    <h1>Pedido #@Model.Id <span class="badge @badge fs-6 align-middle">@Model.Estado.DisplayName()</span></h1>
+    <h1>Pedido #@Model.Id <span class="badge text-bg-light border fs-6 align-middle">@Model.Tipo.DisplayName()</span>
+        <span class="badge @badge fs-6 align-middle">@Model.Estado.DisplayName()</span>
+        @if (Model.Aplicado) { <span class="badge text-bg-info fs-6 align-middle">aplicado</span> }</h1>
     <div class="d-flex gap-2">
-        <a class="btn btn-outline-primary" asp-controller="Circulacoes" asp-action="Details" asp-route-id="@c.Id"><i class="bi bi-bus-front"></i> Circulação @c.ViagemId</a>
+        @if (c is not null)
+        {
+            <a class="btn btn-outline-primary" asp-controller="Circulacoes" asp-action="Details" asp-route-id="@c.Id"><i class="bi bi-bus-front"></i> Circulação @c.ViagemId</a>
+        }
         <a class="btn btn-outline-secondary" asp-action="Index">Voltar</a>
     </div>
 </div>
 
-<div class="card mb-3" style="max-width: 900px">
+<div class="card mb-3" style="max-width: @(Model.Dias.Count > 0 ? "1200px" : "900px")">
     <div class="card-body row g-2 small">
-        <div class="col-md-4"><span class="text-muted">Operador</span><br />@c.Operador?.Designacao</div>
+        <div class="col-md-4"><span class="text-muted">Operador</span><br />@Model.Operador?.Designacao
+            @if (Model.Operador?.Grupo is { } g) { <span class="text-muted">(grupo @(g.Abreviatura ?? g.Designacao))</span> }</div>
         <div class="col-md-4"><span class="text-muted">Pedido por</span><br />@Model.PedidoPor?.Email</div>
         <div class="col-md-4"><span class="text-muted">Pedido em</span><br />@Model.CriadoEm.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div>
-        <div class="col-12"><span class="text-muted">Alteração pretendida</span><div style="white-space: pre-wrap">@Model.Descricao</div></div>
-        <div class="col-md-4"><span class="text-muted">Período</span><br />@D(Model.DataInicio) a @D(Model.DataFim)</div>
-        <div class="col-md-4"><span class="text-muted">Chegada / partida pedidas</span><br /><span class="fw-bold">@H(Model.NovaChegada) / @H(Model.NovaPartida)</span></div>
-        <div class="col-md-4"><span class="text-muted">Em vigor</span><br />@H(c.Chegada) / @H(c.Partida)</div>
+        <div class="col-12"><span class="text-muted">@(Model.Tipo == TipoPedido.Remocao ? "Motivo" : "Descrição")</span><div style="white-space: pre-wrap">@Model.Descricao</div></div>
+        @switch (Model.Tipo)
+        {
+            case TipoPedido.NovaCirculacao:
+                <div class="col-md-4"><span class="text-muted">ID de viagem</span><br /><span class="fw-bold">@Model.ViagemId</span></div>
+                <div class="col-md-4"><span class="text-muted">Linha</span><br />@Model.LinhaId @Model.DesignacaoLinha</div>
+                <div class="col-md-4"><span class="text-muted">Origem → destino</span><br />@(Model.Origem?.Nome ?? "–") → @(Model.Destino?.Nome ?? "–")</div>
+                <div class="col-md-4"><span class="text-muted">Período</span><br />@D(Model.DataInicio) a @D(Model.DataFim)</div>
+                <div class="col-md-4"><span class="text-muted">Dias da semana</span><br />@(semana.Count == 0 ? "todos" : string.Join(", ", new[] { 1, 2, 3, 4, 5, 6, 0 }.Where(semana.Contains).Select(d => nomesDias[d])))</div>
+                <div class="col-md-4"><span class="text-muted">Chegada / partida no TIC</span><br /><span class="fw-bold">@H(Model.NovaChegada) / @H(Model.NovaPartida)</span></div>
+                @if (Model.Dias.Count > 0)
+                {
+                    <div class="col-12"><span class="text-muted">Calendário pedido</span> <span class="badge text-bg-success">@Model.Dias.Count dia(s)</span>
+                        <div id="calendarioPedido" class="mt-1"></div></div>
+                }
+                break;
+            case TipoPedido.Remocao:
+                <div class="col-md-4"><span class="text-muted">Deixa de se realizar a partir de</span><br /><span class="fw-bold">@D(Model.DataInicio)</span></div>
+                <div class="col-md-4"><span class="text-muted">Declaração</span><br />@(c?.IdDcp ?? "–")</div>
+                break;
+            default:
+                <div class="col-md-4"><span class="text-muted">Período</span><br />@D(Model.DataInicio) a @D(Model.DataFim)</div>
+                <div class="col-md-4"><span class="text-muted">Chegada / partida pedidas</span><br /><span class="fw-bold">@H(Model.NovaChegada) / @H(Model.NovaPartida)</span></div>
+                <div class="col-md-4"><span class="text-muted">Em vigor</span><br />@H(c?.Chegada) / @H(c?.Partida)</div>
+                break;
+        }
         @if (Model.Estado != EstadoPedido.Pendente)
         {
             <div class="col-12 border-top pt-2">
@@ -34,12 +75,31 @@
     </div>
 </div>
 
-@if (isAdmin)
+@if (isAdmin && Model.Estado == EstadoPedido.Pendente)
 {
     <form asp-action="Responder" asp-route-id="@Model.Id" method="post" class="card card-form" style="max-width: 900px">
         <div class="card-header">Responder</div>
         <div class="card-body">
-            <p class="small text-muted">A resposta não altera a circulação: faça a alteração na <a asp-controller="Circulacoes" asp-action="Details" asp-route-id="@c.Id">circulação</a> e registe aqui a decisão.</p>
+            <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" name="aplicar" value="true" id="aplicar" checked="@podeAplicar" disabled="@(!podeAplicar)" />
+                <label class="form-check-label" for="aplicar">Ao aceitar: @textoAplicar</label>
+            </div>
+            @if (!podeAplicar)
+            {
+                <p class="small text-muted">O pedido não tem data de início e horas: aceite e faça a alteração na <a asp-controller="Circulacoes" asp-action="Details" asp-route-id="@c?.Id">circulação</a>.</p>
+            }
+            @if (Model.Tipo == TipoPedido.NovaCirculacao)
+            {
+                <div class="row g-2 mb-2">
+                    <div class="col-md-4">
+                        <label class="form-label small mb-0" for="viagemId">ID de viagem a criar</label>
+                        <input class="form-control form-control-sm" id="viagemId" name="viagemId" value="@Model.ViagemId" />
+                    </div>
+                    <div class="col-md-8 small text-muted align-self-end">
+                        ID TIC a atribuir: <strong>@(ViewBag.ProximoIdTic ?? "– (o operador/grupo não tem prefixo de ID TIC)")</strong>
+                    </div>
+                </div>
+            }
             <label class="form-label" for="resposta">Resposta</label>
             <textarea class="form-control" id="resposta" name="resposta" rows="3">@Model.Resposta</textarea>
         </div>
@@ -48,4 +108,17 @@
             <button type="submit" name="estado" value="@EstadoPedido.Rejeitado" class="btn btn-outline-danger"><i class="bi bi-x-lg"></i> Rejeitar</button>
         </div>
     </form>
+}
+
+@section Scripts {
+    @if (Model.Dias.Count > 0)
+    {
+        <script src="~/js/calendario-ano.js" asp-append-version="true"></script>
+        <script>
+            appTic.calendarioAno(document.getElementById("calendarioPedido"), {
+                ano: @Model.Dias.Min(d => d.Data).Year, readOnly: true,
+                dias: @Json.Serialize(Model.Dias.OrderBy(d => d.Data).Select(d => d.Data.ToString("yyyy-MM-dd")))
+            });
+        </script>
+    }
 }

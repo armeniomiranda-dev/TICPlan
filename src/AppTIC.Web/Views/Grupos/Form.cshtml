@@ -1,0 +1,75 @@
+@model GrupoViewModel
+@{
+    ViewData["Title"] = Model.Id == 0 ? "Novo grupo" : $"Grupo {Model.Abreviatura ?? Model.Designacao}";
+    var operadores = (List<GrupoMembroOpcao>)ViewBag.Operadores;
+}
+<div class="page-header"><h1>@ViewData["Title"]</h1></div>
+
+<form asp-action="Save" method="post" class="card card-form" style="max-width: 960px">
+    <div class="card-body">
+        <input type="hidden" asp-for="Id" />
+        <div asp-validation-summary="All" class="text-danger"></div>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label asp-for="Designacao" class="form-label"></label>
+                <input asp-for="Designacao" class="form-control" placeholder="ex.: Rede Nacional de Expressos" />
+            </div>
+            <div class="col-md-3">
+                <label asp-for="Abreviatura" class="form-label"></label>
+                <input asp-for="Abreviatura" class="form-control" />
+            </div>
+            <div class="col-md-3">
+                <label asp-for="Nif" class="form-label"></label>
+                <input asp-for="Nif" class="form-control" />
+            </div>
+            <div class="col-md-3">
+                <label asp-for="PrefixoIdTic" class="form-label"></label>
+                <input asp-for="PrefixoIdTic" type="number" min="1" max="999" class="form-control" placeholder="ex.: 8 → 8001…" />
+            </div>
+            <div class="col-md-4">
+                <partial name="_CorPicker" model="@(new CorPickerModel(Model.Cor, (string)ViewBag.CorEfetiva, "Sem cor própria (cor por omissão)"))" />
+                <div class="form-text">Os operadores do grupo sem cor própria usam esta cor.</div>
+            </div>
+            <div class="col-md-5">
+                <label asp-for="Comentarios" class="form-label"></label>
+                <input asp-for="Comentarios" class="form-control" />
+            </div>
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-end mb-1">
+                    <label class="form-label mb-0">Operadores do grupo</label>
+                    <input type="search" class="form-control form-control-sm" style="max-width: 240px" placeholder="Filtrar…" oninput="filtrarMembros(this.value)" />
+                </div>
+                <div class="border rounded p-2" style="max-height: 360px; overflow:auto">
+                    <div class="row row-cols-1 row-cols-md-2 g-1" id="membros">
+                        @foreach (var o in operadores)
+                        {
+                            <div class="col membro" data-nome="@o.Nome.ToLowerInvariant() @o.Nif">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="Membros" value="@o.Id" id="m@(o.Id)" checked="@Model.Membros.Contains(o.Id)" />
+                                    <label class="form-check-label small" for="m@(o.Id)">
+                                        @o.Nome <span class="text-muted">@o.Nif · @o.NumCirculacoes circ.</span>
+                                        @if (o.GrupoAtual is not null) { <span class="badge text-bg-warning">em @o.GrupoAtual</span> }
+                                    </label>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="form-text">Um operador só pertence a um grupo: ao marcar um que está noutro grupo, muda para este.</div>
+            </div>
+        </div>
+    </div>
+    <div class="card-footer d-flex gap-2">
+        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> Guardar</button>
+        <a asp-action="Index" class="btn btn-outline-secondary">Cancelar</a>
+    </div>
+</form>
+
+@section Scripts {
+    <script>
+        function filtrarMembros(texto) {
+            const t = texto.trim().toLowerCase();
+            document.querySelectorAll('#membros .membro').forEach(el => el.classList.toggle('d-none', t !== '' && !el.dataset.nome.includes(t)));
+        }
+    </script>
+}

@@ -62,3 +62,41 @@
 .sim-legenda tbody th { font-weight: 600; }
 .sim-legenda tbody tr:last-child th, .sim-legenda tbody tr:last-child td { border-bottom: 0; }
 .sim-zona { display: inline-block; width: .7rem; height: .7rem; border-radius: .15rem; margin-right: .45rem; vertical-align: -.05rem; background: var(--cor); }
+.sim-legenda tbody th span:last-child { vertical-align: middle; }
+.sim-config { margin-top: .75rem; border-top: 1px solid #155e75; padding-top: .6rem; color: #e2e8f0; }
+.sim-config summary { cursor: pointer; font-weight: 600; color: #bae6fd; }
+.sim-config p { margin: .5rem 0; color: #94a3b8; }
+.sim-config h3 { font-size: .8rem; margin: .8rem 0 .4rem; color: #bae6fd; }
+.sim-config-categorias { display: grid; gap: .4rem; }
+.sim-config-linha { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .6rem; padding: .5rem; background: #0f172a; border: 1px solid #334155; border-radius: .5rem; }
+.sim-config label { display: grid; gap: .2rem; font-size: .7rem; color: #94a3b8; }
+.sim-config input:not([type=checkbox]):not([type=color]), .sim-config select, .sim-config button { background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: .4rem; padding: .35rem .5rem; font-size: .75rem; }
+.sim-config input[type=number] { width: 6.5rem; }
+.sim-config input[type=color] { width: 2.4rem; height: 1.9rem; padding: 0; border: 1px solid #475569; border-radius: .4rem; background: #1e293b; }
+.sim-config input[type=checkbox] { width: 1rem; height: 1rem; }
+.sim-config button:hover:not(:disabled) { background: #2563eb; }
+.sim-config button:disabled { opacity: .5; }
+.sim-config-cais-lista { flex: 1 1 8rem; font-size: .75rem; color: #cbd5e1; padding-bottom: .4rem; }
+.sim-config-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; margin-top: .6rem; }
+.sim-config-acoes label { display: flex; align-items: center; gap: .4rem; font-size: .75rem; color: #e2e8f0; }
+.sim-config-cais { display: grid; grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); gap: .4rem; }
+.sim-config-cais select { width: 100%; border-width: 2px; }
+.sim-kpis { margin-top: .8rem; }
+.sim-kpis > p { font-size: .8rem; color: #94a3b8; margin: .5rem 0 0; }
+.sim-kpi-grupos { display: grid; gap: .8rem; margin-top: .7rem; }
+.sim-kpi-grupo h3 { font-size: .8rem; color: #bae6fd; margin: 0 0 .4rem; text-transform: uppercase; letter-spacing: .04em; }
+.sim-kpi-cartoes { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: .5rem; }
+.sim-kpi { background: #1e293b; border: 1px solid #334155; border-left: 4px solid #475569; border-radius: .5rem; padding: .55rem .7rem; display: grid; gap: .15rem; align-content: start; }
+.sim-kpi.bom { border-left-color: #22c55e; }
+.sim-kpi.aviso { border-left-color: #eab308; }
+.sim-kpi.mau { border-left-color: #ef4444; }
+.sim-kpi-nome { font-size: .72rem; color: #94a3b8; }
+.sim-kpi strong { font-size: 1.15rem; color: #fff; }
+.sim-kpi small { font-size: .72rem; color: #cbd5e1; }
+.sim-kpi-horas { display: grid; grid-template-columns: repeat(24, minmax(0, 1fr)); gap: .2rem; margin-top: .6rem; font-size: .65rem; color: #94a3b8; text-align: center; }
+.sim-kpi-hora { display: grid; gap: .15rem; }
+.sim-kpi-valor { min-height: .9rem; color: #e2e8f0; }
+.sim-kpi-area { position: relative; height: 6rem; background: #111c2e; border-radius: .25rem; display: flex; align-items: flex-end; }
+.sim-kpi-barra { width: 100%; background: #38bdf8; border-radius: .25rem .25rem 0 0; }
+.sim-kpi-barra.mau { background: #ef4444; }
+.sim-kpi-traco { position: absolute; left: 0; right: 0; height: 2px; background: #facc15; }

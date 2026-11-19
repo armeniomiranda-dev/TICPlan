@@ -3,6 +3,8 @@
 @{
     ViewData["Title"] = Model.Id == 0 ? "Novo operador" : "Editar operador";
     var ambitos = EnumExtensions.ToLookup<Ambito>();
+    var grupos = (List<LookupItem>)ViewBag.Grupos;
+    var membros = (List<string>)ViewBag.Membros;
 }
 <div class="page-header"><h1>@ViewData["Title"]</h1></div>
 
@@ -25,6 +27,10 @@
                 <label asp-for="Abreviatura" class="form-label"></label>
                 <input asp-for="Abreviatura" class="form-control" />
             </div>
+            <div class="col-md-6">
+                <partial name="_CorPicker" model="@(new CorPickerModel(Model.Cor, (string)ViewBag.CorEfetiva,
+                    Model.GrupoId is null ? "Sem cor própria (cor por omissão)" : "Sem cor própria (usa a cor do grupo)"))" />
+            </div>
             <div class="col-md-4">
                 <label asp-for="Alvara" class="form-label"></label>
                 <input asp-for="Alvara" class="form-control" />
@@ -39,6 +45,34 @@
                 <ejs-dropdownlist id="Ambito" name="Ambito" dataSource="@ambitos" value="@Model.Ambito?.ToString()" placeholder="Escolha…" showClearButton="true">
                     <e-dropdownlist-fields text="Text" value="Value"></e-dropdownlist-fields>
                 </ejs-dropdownlist>
+            </div>
+            <div class="col-12"><h2 class="h6 text-uppercase text-muted mt-2 mb-0">Grupo e numeração do ID TIC</h2></div>
+            @if (Model.EGrupo)
+            {
+                <div class="col-md-8">
+                    <label class="form-label">Grupo</label>
+                    <div class="form-control-plaintext"><span class="badge text-bg-info">é um grupo</span>
+                        <a asp-controller="Grupos" asp-action="Edit" asp-route-id="@Model.Id" class="ms-2">gerir os operadores do grupo</a></div>
+                </div>
+            }
+            else
+            {
+                <div class="col-md-8">
+                    <label asp-for="GrupoId" class="form-label">Pertence ao grupo</label>
+                    <ejs-dropdownlist id="GrupoId" name="GrupoId" dataSource="@grupos" value="@Model.GrupoId?.ToString()" placeholder="Sem grupo" showClearButton="true">
+                        <e-dropdownlist-fields text="Text" value="Value"></e-dropdownlist-fields>
+                    </ejs-dropdownlist>
+                    <span asp-validation-for="GrupoId" class="text-danger small"></span>
+                </div>
+            }
+            <div class="col-md-4">
+                <label asp-for="PrefixoIdTic" class="form-label"></label>
+                <input asp-for="PrefixoIdTic" type="number" min="1" max="999" class="form-control" placeholder="ex.: 8 → 8001, 8002…" />
+                <span asp-validation-for="PrefixoIdTic" class="text-danger small"></span>
+            </div>
+            <div class="col-12 form-text mt-0">
+                Os grupos gerem-se em <a asp-controller="Grupos" asp-action="Index">Grupos</a>. Num operador do grupo vale o prefixo do ID TIC do grupo.
+                @if (membros.Count > 0) { <br /><strong>Operadores do grupo:</strong> @string.Join(", ", membros) }
             </div>
             <div class="col-12">
                 <label asp-for="GtfsParagensTic" class="form-label"></label>

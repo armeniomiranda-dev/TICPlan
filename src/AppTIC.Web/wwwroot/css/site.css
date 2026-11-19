@@ -29,3 +29,17 @@ main { flex: 1; }
 .percurso-tic-horas { font-size: .85rem; color: var(--bs-primary-text-emphasis); }
 .fc a { text-decoration: none; color: inherit; }
 .fc .fc-col-header-cell-cushion { font-weight: 600; }
+
+/* Calendário anual (pedido de nova circulação) */
+.cal-ano { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: .75rem; }
+.cal-mes { border: 1px solid var(--bs-border-color); border-radius: .4rem; padding: .4rem; background: var(--bs-body-bg); }
+.cal-titulo { font-weight: 600; font-size: .8rem; text-align: center; margin-bottom: .25rem; }
+.cal-titulo.clicavel { cursor: pointer; }
+.cal-titulo.clicavel:hover { color: var(--bs-primary); }
+.cal-grelha { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.cal-sem { font-size: .65rem; color: var(--bs-secondary-color); text-align: center; }
+.cal-dia { font-size: .7rem; padding: 2px 0; border: 1px solid transparent; border-radius: .25rem; background: var(--bs-tertiary-bg); line-height: 1.4; }
+.cal-dia:not(:disabled):hover { border-color: var(--bs-primary); }
+.cal-dia.marcado { background: #198754; color: #fff; }
+.cal-dia.fora { opacity: .3; background: transparent; }
+.cal-dia:disabled { cursor: default; }

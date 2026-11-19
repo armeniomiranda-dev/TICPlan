@@ -5,7 +5,8 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace AppTIC.Web.Controllers;
 
-[Authorize]
+/// <summary>Simulação do terminal: só para o Admin (os operadores não a veem).</summary>
+[Authorize(Roles = Roles.Admin)]
 public class SimulacaoController(SimulacaoService simulacao) : Controller
 {
     public IActionResult Index() => View();

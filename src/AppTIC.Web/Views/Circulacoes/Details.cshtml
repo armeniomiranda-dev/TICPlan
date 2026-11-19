@@ -33,6 +33,7 @@
         else
         {
             <a class="btn btn-primary" asp-controller="Pedidos" asp-action="Criar" asp-route-circulacaoId="@Model.Id"><i class="bi bi-pencil-square"></i> Pedido de alteração</a>
+            <a class="btn btn-outline-danger" asp-controller="Pedidos" asp-action="Criar" asp-route-circulacaoId="@Model.Id" asp-route-tipo="@TipoPedido.Remocao"><i class="bi bi-x-circle"></i> Remover a partir de…</a>
         }
         <a class="btn btn-outline-secondary" asp-action="Index">Voltar</a>
     </div>
@@ -41,12 +42,13 @@
 @if (pedidos.Count > 0)
 {
     <div class="card mb-3">
-        <div class="card-header"><i class="bi bi-pencil-square"></i> Pedidos de alteração</div>
+        <div class="card-header"><i class="bi bi-pencil-square"></i> Pedidos</div>
         <ul class="list-group list-group-flush small">
             @foreach (var p in pedidos)
             {
                 <li class="list-group-item d-flex gap-3 align-items-start">
                     <a asp-controller="Pedidos" asp-action="Details" asp-route-id="@p.Id" class="fw-semibold">#@p.Id</a>
+                    <span class="badge text-bg-light border">@p.Tipo.DisplayName()</span>
                     <span class="badge @(p.Estado == EstadoPedido.Pendente ? "text-bg-warning" : p.Estado == EstadoPedido.Aceite ? "text-bg-success" : "text-bg-secondary")">@p.Estado.DisplayName()</span>
                     <span class="flex-grow-1">@p.Descricao</span>
                     <span class="text-muted text-nowrap">@p.PedidoPor?.Email · @p.CriadoEm.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
@@ -63,12 +65,31 @@
         <div class="col-md-2"><span class="text-muted">Âmbito</span><br />@Model.Ambito?.DisplayName()</div>
         <div class="col-md-2"><span class="text-muted">Categoria</span><br />@(Model.Categoria?.DisplayName() ?? "–")</div>
         <div class="col-md-2"><span class="text-muted">Autorização</span><br />@Model.Autorizacao @(Model.AutorizacaoValidade is { } v ? $"(até {v:dd/MM/yyyy})" : "")</div>
-        <div class="col-md-2"><span class="text-muted">ID TIC</span><br />@Model.IdTic</div>
+        <div class="col-md-2"><span class="text-muted">ID TIC</span><br /><span class="fw-semibold">@(Model.IdTic ?? "–")</span>
+            @if (podeEditar && Model.IdTic is null)
+            {
+                <form asp-action="AtribuirIdTic" asp-route-id="@Model.Id" method="post" class="d-inline"><button class="btn btn-link btn-sm p-0">atribuir</button></form>
+            }
+        </div>
         <div class="col-md-3"><span class="text-muted">Origem → destino</span><br />@Model.Origem?.Nome → @Model.Destino?.Nome</div>
         <div class="col-md-3"><span class="text-muted">Chegada / partida TIC (em vigor)</span><br /><span class="fw-bold">@H(Model.Chegada) / @H(Model.Partida)</span></div>
         <div class="col-md-3"><span class="text-muted">Data de início / data de fim</span><br />@(primeiroDia?.ToString("dd/MM/yyyy") ?? "–") a @(ultimoDia?.ToString("dd/MM/yyyy") ?? "–")</div>
         <div class="col-md-3"><span class="text-muted">Embarque/desembarque</span><br />@(Model.TempoEmbarqueMinutos is { } m ? $"{m} min" : "–")</div>
-        <div class="col-md-3"><span class="text-muted">Declaração de capacidade</span><br />@(Model.DeclaracaoCapacidade ? "sim" : "não") @Model.IdDcp</div>
+        <div class="col-md-3"><span class="text-muted">Declaração (DCP)</span><br />
+            @if (Model.Declaracao is { } dcp)
+            {
+                <a asp-controller="Declaracoes" asp-action="Details" asp-route-id="@dcp.Id" class="fw-semibold">@dcp.Codigo</a>
+            }
+            else
+            {
+                <span>sem declaração@(string.IsNullOrWhiteSpace(Model.IdDcp) ? "" : $" (no ficheiro: {Model.IdDcp})")</span>
+                @if (podeEditar)
+                {
+                    <a asp-controller="Declaracoes" asp-action="Index" class="small">associar em DCP</a>
+                }
+            }
+            <span class="text-muted">(@(Model.DeclaracaoCapacidade ? "precisa" : "não precisa"))</span>
+        </div>
         @if (podeEditar && Model.ImportacaoId is { } lote)
         {
             <div class="col-md-3"><span class="text-muted">Importação</span><br /><a asp-controller="Importacoes" asp-action="Details" asp-route-id="@lote">#@lote</a></div>

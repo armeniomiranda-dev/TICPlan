@@ -192,7 +192,7 @@ public class ExcelImportTests : IDisposable
         await db.SaveChangesAsync();
 
         var gtfsOpcoes = Options.Create(new GtfsOptions { StoragePath = _pasta, ParagensTicPorOmissao = ["100"] });
-        var servico = new ExcelImportService(db, gtfsOpcoes, new SemRegisto());
+        var servico = new ExcelImportService(db, gtfsOpcoes, new SemRegisto(), new NumeracaoService(db, new Admin()));
         var dados = ExcelPlaneamento.Ler(Ficheiro("plano.xlsx"));
 
         var previsto = await servico.PreverAsync(lote, dados);

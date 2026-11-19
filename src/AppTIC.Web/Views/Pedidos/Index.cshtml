@@ -1,16 +1,21 @@
 @model List<PedidoRow>
 @{
-    ViewData["Title"] = "Pedidos de alteração";
+    ViewData["Title"] = "Pedidos";
 }
 <div class="page-header">
-    <h1>Pedidos de alteração</h1>
+    <h1>Pedidos</h1>
+    @if (!User.IsInRole(Roles.Admin))
+    {
+        <a class="btn btn-primary" asp-action="Criar" asp-route-tipo="@TipoPedido.NovaCirculacao"><i class="bi bi-plus-circle"></i> Pedido de nova circulação</a>
+    }
 </div>
+<p class="small text-muted">Alteração e remoção de uma circulação pedem-se no detalhe da circulação.</p>
 
 <script id="pedidoTemplate" type="text/x-template">
     <a href="@Url.Action("Details")/${Id}" class="fw-semibold">#${Id}</a>
 </script>
 <script id="pedidoViagemTemplate" type="text/x-template">
-    <a href="@Url.Action("Details", "Circulacoes")/${CirculacaoId}">${ViagemId}</a>
+    ${if(CirculacaoId)}<a href="@Url.Action("Details", "Circulacoes")/${CirculacaoId}">${ViagemId}</a>${else}${ViagemId}${/if}
 </script>
 <script id="pedidoEstadoTemplate" type="text/x-template">
     ${if(Estado === 'Pendente')}<span class="badge text-bg-warning">${Estado}</span>${else}<span class="badge text-bg-secondary">${Estado}</span>${/if}
@@ -22,10 +27,11 @@
     <e-grid-pagesettings pageSize="25"></e-grid-pagesettings>
     <e-grid-columns>
         <e-grid-column field="Id" headerText="Pedido" template="#pedidoTemplate" width="90"></e-grid-column>
+        <e-grid-column field="Tipo" headerText="Tipo" width="140"></e-grid-column>
         <e-grid-column field="Estado" headerText="Estado" template="#pedidoEstadoTemplate" width="110"></e-grid-column>
         <e-grid-column field="ViagemId" headerText="Circulação" template="#pedidoViagemTemplate" width="130"></e-grid-column>
         <e-grid-column field="Operador" headerText="Operador" width="140"></e-grid-column>
-        <e-grid-column field="Descricao" headerText="Alteração pretendida" width="320"></e-grid-column>
+        <e-grid-column field="Descricao" headerText="Descrição" width="320"></e-grid-column>
         <e-grid-column field="PedidoPor" headerText="Pedido por" width="180"></e-grid-column>
         <e-grid-column field="CriadoEm" headerText="Pedido em" type="datetime" format="dd/MM/yyyy HH:mm" width="140"></e-grid-column>
         <e-grid-column field="RespondidoEm" headerText="Respondido em" type="datetime" format="dd/MM/yyyy HH:mm" width="140"></e-grid-column>

@@ -1,3 +1,4 @@
+using AppTIC.Web.Services;
 using AppTIC.Web.Data;
 using AppTIC.Web.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
@@ -8,9 +9,6 @@ namespace AppTIC.Web.Controllers;
 /// <summary>Vista geral (FullCalendar) das chegadas e partidas na paragem do TIC.</summary>
 public class CalendarioController(ApplicationDbContext db) : Controller
 {
-    private static readonly string[] Cores =
-        ["#0d6efd", "#198754", "#fd7e14", "#6f42c1", "#d63384", "#20c997", "#0dcaf0", "#795548", "#6c757d", "#b8860b"];
-
     public async Task<IActionResult> Index()
     {
         var operadores = await Operadores();
@@ -55,7 +53,7 @@ public class CalendarioController(ApplicationDbContext db) : Controller
             void Evento(string tipo, DateOnly data, TimeOnly hora)
             {
                 if (!tipos.Contains(tipo) || data < from || data >= to) return;
-                var cor = op?.Cor ?? Cores[^1];
+                var cor = op?.Cor ?? CoresOperador.PorOmissao(d.OperadorId);
                 lista.Add(new
                 {
                     id = $"{d.CirculacaoId}-{d.Data:yyyyMMdd}-{tipo}",
@@ -87,10 +85,11 @@ public class CalendarioController(ApplicationDbContext db) : Controller
 
     public record OperadorCor(int Id, string Nome, string Cor);
 
-    /// <summary>Operadores visíveis, cada um com uma cor fixa (pela ordem do Id).</summary>
+    /// <summary>Operadores visíveis com a sua cor (a do operador; sem cor, a do grupo; sem nenhuma, a da paleta).</summary>
     private async Task<List<OperadorCor>> Operadores()
     {
-        var ops = await db.Operadores.OrderBy(o => o.Id).Select(o => new { o.Id, Nome = o.Abreviatura ?? o.Designacao }).ToListAsync();
-        return ops.Select((o, i) => new OperadorCor(o.Id, o.Nome, Cores[i % Cores.Length])).OrderBy(o => o.Nome).ToList();
+        var ops = await db.Operadores.Select(o => new { o.Id, Nome = o.Abreviatura ?? o.Designacao, o.Cor, CorGrupo = o.Grupo != null ? o.Grupo.Cor : null })
+            .ToListAsync();
+        return ops.Select(o => new OperadorCor(o.Id, o.Nome, CoresOperador.De(o.Id, o.Cor, o.CorGrupo))).OrderBy(o => o.Nome).ToList();
     }
 }

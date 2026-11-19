@@ -1,0 +1,132 @@
+@model Declaracao
+@{
+    ViewData["Title"] = $"Declaração {Model.Codigo}";
+    var isAdmin = User.IsInRole(Roles.Admin);
+    var circulacoes = (List<DeclaracaoAnoCirculacaoRow>)ViewBag.Circulacoes;
+    var operadores = ViewBag.Operadores as List<LookupItem> ?? [];
+    var encerrada = Model.Renovacao is not null;
+    // Só se gere uma declaração em vigor (as renovadas ficam para consulta).
+    var gerir = isAdmin && !encerrada;
+    string D(DateTime? d) => d?.ToString("dd/MM/yyyy") ?? "–";
+}
+<div class="page-header">
+    <h1>Declaração <span class="text-primary font-monospace">@Model.Codigo</span></h1>
+    <div class="d-flex gap-2">
+        @if (gerir && circulacoes.Count == 0)
+        {
+            <form asp-action="Delete" asp-route-id="@Model.Id" method="post" onsubmit="return confirm('Eliminar esta declaração?')">
+                <button class="btn btn-outline-danger"><i class="bi bi-trash"></i> Eliminar</button>
+            </form>
+        }
+        <a class="btn btn-outline-secondary" asp-action="Index" asp-route-ano="@Model.Ano">Voltar</a>
+    </div>
+</div>
+
+@if (Model.Renovacao is { } renovacao)
+{
+    <div class="alert alert-secondary py-2 small"><i class="bi bi-lock"></i> Declaração de @Model.Ano encerrada: foi renovada para
+        <a asp-action="Details" asp-route-id="@renovacao.Id" class="alert-link font-monospace">@renovacao.Codigo</a>.
+        As circulações abaixo são as que tinha à data da renovação.</div>
+}
+@if (Model.Anterior is { } anterior)
+{
+    <div class="alert alert-info py-2 small"><i class="bi bi-arrow-repeat"></i> Renovação de
+        <a asp-action="Details" asp-route-id="@anterior.Id" class="alert-link font-monospace">@anterior.Codigo</a>.</div>
+}
+
+<div class="card mb-3">
+    <div class="card-body row g-2 small">
+        <div class="col-md-2"><span class="text-muted">Ano</span><br /><span class="fw-bold">@Model.Ano</span></div>
+        <div class="col-md-2"><span class="text-muted">Número</span><br /><span class="fw-bold">@Model.Numero</span></div>
+        <div class="col-md-2"><span class="text-muted">Versão</span><br /><span class="fw-bold">@Model.Versao.ToString("00")</span></div>
+        <div class="col-md-3"><span class="text-muted">Declarante</span><br />@(Model.Operador?.Designacao ?? "–")</div>
+        <div class="col-md-3"><span class="text-muted">Criada / atualizada</span><br />@Model.CriadoEm.ToLocalTime().ToString("dd/MM/yyyy HH:mm") / @Model.AtualizadoEm.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-xl-8">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-bus-front"></i> Circulações <span class="badge text-bg-secondary">@circulacoes.Count</span></span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle small mb-0">
+                    <thead><tr><th>ID de viagem</th><th>ID TIC</th><th>Operador</th><th>Linha</th><th>Chegada</th><th>Partida</th><th>Período em @Model.Ano</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var c in circulacoes)
+                        {
+                            <tr>
+                                <td><a asp-controller="Circulacoes" asp-action="Details" asp-route-id="@c.CirculacaoId">@c.ViagemId</a></td>
+                                <td class="font-monospace">@(c.IdTic ?? "–")</td>
+                                <td>@c.Operador</td>
+                                <td>@c.LinhaId @c.DesignacaoLinha</td>
+                                <td class="fw-bold">@(c.Chegada ?? "–")</td>
+                                <td class="fw-bold">@(c.Partida ?? "–")</td>
+                                <td class="text-nowrap">@D(c.Primeiro) a @D(c.Ultimo)</td>
+                                <td class="text-end">
+                                    @if (gerir)
+                                    {
+                                        <form asp-action="RetirarCirculacao" asp-route-id="@Model.Id" asp-route-circulacaoId="@c.CirculacaoId" method="post"
+                                              onsubmit="return confirm('Retirar a circulação desta declaração?')">
+                                            <button class="btn btn-sm btn-link text-danger p-0" title="Retirar da declaração"><i class="bi bi-x-lg"></i></button>
+                                        </form>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        @if (circulacoes.Count == 0) { <tr><td colspan="8" class="text-muted">Sem circulações.</td></tr> }
+                    </tbody>
+                </table>
+            </div>
+            @if (gerir)
+            {
+                <form asp-action="AdicionarCirculacao" asp-route-id="@Model.Id" method="post" class="card-footer d-flex gap-2 align-items-center">
+                    <input name="codigo" class="form-control form-control-sm" style="max-width: 360px" placeholder="ID TIC ou ID de viagem (vários: separe por vírgula)" />
+                    <button class="btn btn-sm btn-outline-primary"><i class="bi bi-plus-lg"></i> Associar circulação</button>
+                    <span class="small text-muted">Uma circulação que esteja noutra declaração passa para esta.</span>
+                </form>
+            }
+        </div>
+    </div>
+    <div class="col-xl-4">
+        <div class="card mb-3">
+            <div class="card-header"><i class="bi bi-clock-history"></i> Versões</div>
+            <ul class="list-group list-group-flush small">
+                @foreach (var v in Model.Versoes)
+                {
+                    <li class="list-group-item">
+                        <div class="d-flex justify-content-between">
+                            <span class="fw-semibold font-monospace">@Declaracao.Formatar(Model.Ano, Model.Numero, v.Versao)</span>
+                            <span class="text-muted">@v.Data.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
+                        </div>
+                        <div>@v.Motivo</div>
+                        @if (v.Utilizador is not null) { <div class="text-muted">@v.Utilizador</div> }
+                    </li>
+                }
+                @if (Model.Versoes.Count == 0) { <li class="list-group-item text-muted">Sem histórico.</li> }
+            </ul>
+        </div>
+        @if (gerir)
+        {
+            <form asp-action="NovaVersao" asp-route-id="@Model.Id" method="post" class="card mb-3">
+                <div class="card-header">Nova versão manual</div>
+                <div class="card-body">
+                    <input name="motivo" class="form-control form-control-sm" placeholder="Motivo" />
+                    <div class="form-text">As mudanças de horário feitas na aplicação já criam versões automaticamente.</div>
+                </div>
+                <div class="card-footer"><button class="btn btn-sm btn-outline-primary">Passar a @Declaracao.Formatar(Model.Ano, Model.Numero, Model.Versao + 1)</button></div>
+            </form>
+            <form asp-action="AlterarOperador" asp-route-id="@Model.Id" method="post" class="card">
+                <div class="card-header">Declarante</div>
+                <div class="card-body">
+                    <ejs-dropdownlist id="operadorId" name="operadorId" dataSource="@operadores" value="@Model.OperadorId?.ToString()" placeholder="Sem declarante"
+                                      allowFiltering="true" filterType="Contains" showClearButton="true">
+                        <e-dropdownlist-fields text="Text" value="Value"></e-dropdownlist-fields>
+                    </ejs-dropdownlist>
+                </div>
+                <div class="card-footer"><button class="btn btn-sm btn-outline-primary">Guardar</button></div>
+            </form>
+        }
+    </div>
+</div>

@@ -41,8 +41,8 @@ public class UtilizadorViewModel
     [StringLength(200), Display(Name = "Entidade")]
     public string? Entidade { get; set; }
 
-    /// <summary>Obrigatório no perfil Utilizador: só vê a informação deste operador.</summary>
-    [Display(Name = "Operador")]
+    /// <summary>Obrigatório no perfil Utilizador: só vê a informação deste operador (ou, num grupo, dos operadores do grupo).</summary>
+    [Display(Name = "Operador ou grupo")]
     public int? OperadorId { get; set; }
 
     [Required, Display(Name = "Perfil")]

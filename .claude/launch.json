@@ -4,8 +4,30 @@
     {
       "name": "apptic",
       "runtimeExecutable": "dotnet",
-      "runtimeArgs": ["run", "--project", "src/AppTIC.Web", "--launch-profile", "http"],
+      "runtimeArgs": [
+        "run",
+        "--project",
+        "src/AppTIC.Web",
+        "--launch-profile",
+        "http"
+      ],
       "port": 5086
+    },
+    {
+      "name": "apptic-release",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": [
+        "run",
+        "--project",
+        "src/AppTIC.Web",
+        "-c",
+        "Release",
+        "--launch-profile",
+        "http",
+        "--urls",
+        "http://localhost:5087"
+      ],
+      "port": 5087
     }
   ]
 }

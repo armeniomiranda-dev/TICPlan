@@ -39,13 +39,31 @@
                         <ul class="navbar-nav me-auto">
                             @if (isAdmin)
                             {
-                                <li class="nav-item"><a class="nav-link @Active("Operadores")" asp-controller="Operadores" asp-action="Index"><i class="bi bi-building"></i> Operadores</a></li>
+                                var menuOperadores = new[] { "Operadores", "Grupos", "Declaracoes", "NumeracaoIdTic" }.Any(c => Active(c) != "");
+                                <li class="nav-item dropdown">
+                                    <a class="nav-link dropdown-toggle text-nowrap @(menuOperadores ? "active" : "")" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-building"></i> Operadores</a>
+                                    <ul class="dropdown-menu">
+                                        <li><a class="dropdown-item @Active("Operadores")" asp-controller="Operadores" asp-action="Index"><i class="bi bi-building"></i> Operadores</a></li>
+                                        <li><a class="dropdown-item @Active("Grupos")" asp-controller="Grupos" asp-action="Index"><i class="bi bi-diagram-3"></i> Grupos de operadores</a></li>
+                                        <li><hr class="dropdown-divider" /></li>
+                                        <li><a class="dropdown-item @Active("Declaracoes")" asp-controller="Declaracoes" asp-action="Index"><i class="bi bi-file-earmark-text"></i> Declarações (DCP)</a></li>
+                                        <li><a class="dropdown-item @Active("NumeracaoIdTic")" asp-controller="NumeracaoIdTic" asp-action="Index"><i class="bi bi-123"></i> Numeração ID TIC</a></li>
+                                    </ul>
+                                </li>
                             }
                             <li class="nav-item"><a class="nav-link @Active("Paragens")" asp-controller="Paragens" asp-action="Index"><i class="bi bi-geo-alt"></i> Paragens</a></li>
                             <li class="nav-item"><a class="nav-link @Active("Circulacoes")" asp-controller="Circulacoes" asp-action="Index"><i class="bi bi-bus-front"></i> Circulações</a></li>
                             <li class="nav-item"><a class="nav-link @Active("Pedidos")" asp-controller="Pedidos" asp-action="Index"><i class="bi bi-pencil-square"></i> Pedidos</a></li>
+                            @if (!isAdmin)
+                            {
+                                <li class="nav-item"><a class="nav-link @Active("Declaracoes")" asp-controller="Declaracoes" asp-action="Index"><i class="bi bi-file-earmark-text"></i> DCP</a></li>
+                            }
                             <li class="nav-item"><a class="nav-link @Active("Calendario")" asp-controller="Calendario" asp-action="Index"><i class="bi bi-calendar3"></i> Calendário</a></li>
-                            <li class="nav-item"><a class="nav-link @Active("Simulacao")" asp-controller="Simulacao" asp-action="Index"><i class="bi bi-play-circle"></i> Simulação</a></li>
+                            @if (isAdmin)
+                            {
+                                <li class="nav-item"><a class="nav-link @Active("Simulacao")" asp-controller="Simulacao" asp-action="Index"><i class="bi bi-play-circle"></i> Simulação</a></li>
+                            }
+                            <li class="nav-item"><a class="nav-link @Active("Exportacao")" asp-controller="Exportacao" asp-action="Index"><i class="bi bi-filetype-csv"></i> Exportação</a></li>
                             <li class="nav-item"><a class="nav-link @Active("GtfsFeeds")" asp-controller="GtfsFeeds" asp-action="Index"><i class="bi bi-file-earmark-zip"></i> Feeds GTFS</a></li>
                             @if (isAdmin)
                             {

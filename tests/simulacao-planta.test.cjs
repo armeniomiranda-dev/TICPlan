@@ -37,3 +37,49 @@ test('o percurso animado começa e termina nos pontos indicados', () => {
     assert.deepEqual(planta.pontoNoPercurso(pontos, .75), { x: 10, y: 5, angulo: Math.PI / 2 });
     assert.deepEqual(planta.pontoNoPercurso(pontos, 1), { x: 10, y: 10, angulo: Math.PI / 2 });
 });
+
+test('a ordem de saída da planta coincide com a do planeador e do servidor', () => {
+    assert.deepEqual(planta.ordemSaida, planeador.ORDEM_SAIDA);
+});
+
+test('autocarros que partem juntos saem em fila indiana, sem se sobreporem', () => {
+    const cais = id => planta.cais.find(c => c.id === id);
+    const passagens = [1, 4, 8, 12, 17].map(id => ({ id: 'b' + id, cais: cais(id), inicio: 0, fim: 3600 }));
+    const filas = planta.filas(passagens);
+
+    // Todos saem até à hora de fim, com o intervalo de segurança entre eles.
+    const partidas = [...filas.values()].map(f => f.partida).sort((a, b) => a - b);
+    assert.equal(partidas.at(-1), 3600);
+    assert.ok(partidas.every((p, i) => i === 0 || p - partidas[i - 1] >= planta.ESPACAMENTO / planta.VELOCIDADE - 1e-9));
+
+    for (let t = 3400; t < 3600; t += 0.5) {
+        const naVia = passagens.map(p => planta.posicao(filas.get(p.id), t))
+            .filter(p => p && p.y === planta.ESTRADA_Y).map(p => p.x).sort((a, b) => a - b);
+        assert.ok(naVia.every((x, i) => i === 0 || x - naVia[i - 1] >= planta.ESPACAMENTO - 1e-6), 'sobreposição na via em t=' + t);
+    }
+});
+
+test('autocarros que chegam juntos entram em fila e estacionam no seu cais', () => {
+    const cais = id => planta.cais.find(c => c.id === id);
+    const passagens = [2, 3, 10].map(id => ({ id: 'b' + id, cais: cais(id), inicio: 600, fim: 3600 }));
+    const filas = planta.filas(passagens);
+    assert.equal(Math.min(...[...filas.values()].map(f => f.chegada)), 600);
+
+    for (let t = 600; t < 800; t += 0.5) {
+        const pontos = passagens.map(p => planta.posicao(filas.get(p.id), t)).filter(Boolean);
+        for (let i = 0; i < pontos.length; i++)
+            for (let j = i + 1; j < pontos.length; j++)
+                assert.ok(Math.hypot(pontos[i].x - pontos[j].x, pontos[i].y - pontos[j].y) >= 40, 'sobreposição na entrada em t=' + t);
+    }
+    for (const p of passagens) {
+        const parado = planta.posicao(filas.get(p.id), 1800);
+        assert.deepEqual([parado.x, parado.y], [p.cais.x, p.cais.y]);
+        assert.equal(planta.posicao(filas.get(p.id), 3600), null);
+    }
+});
+
+test('permanência curta reparte o tempo entre a entrada e a saída', () => {
+    const fila = planta.filas([{ id: 'a', cais: planta.cais[0], inicio: 0, fim: 60 }]).get('a');
+    assert.equal(fila.estacionado, fila.arranque);
+    assert.ok(fila.chegada === 0 && fila.partida === 60 && fila.estacionado > 0 && fila.estacionado < 60);
+});

@@ -32,8 +32,14 @@ public class Circulacao : OwnedEntity
     [Display(Name = "Declaração de capacidade")]
     public bool DeclaracaoCapacidade { get; set; }
 
+    /// <summary>Código Ano.Numero.Versao da declaração (cópia de Declaracao.Codigo; texto livre quando não há declaração).</summary>
     [StringLength(50), Display(Name = "ID DCP")]
     public string? IdDcp { get; set; }
+
+    /// <summary>Declaração de capacidade (DCP) que agrega esta circulação.</summary>
+    [Display(Name = "Declaração (DCP)")]
+    public int? DeclaracaoId { get; set; }
+    public Declaracao? Declaracao { get; set; }
 
     [Required, StringLength(50), Display(Name = "ID de viagem / código de circulação")]
     public string ViagemId { get; set; } = string.Empty;

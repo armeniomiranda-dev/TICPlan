@@ -1,44 +1,204 @@
 @model PedidoAlteracao
 @{
-    var c = (Circulacao)ViewBag.Circulacao;
-    ViewData["Title"] = $"Pedido de alteração · {c.ViagemId}";
+    var c = ViewBag.Circulacao as Circulacao;
+    var (titulo, icone) = Model.Tipo switch
+    {
+        TipoPedido.NovaCirculacao => ("Pedido de nova circulação", "bi-plus-circle"),
+        TipoPedido.Remocao => ("Remoção de circulação", "bi-x-circle"),
+        _ => ("Pedido de alteração", "bi-pencil-square")
+    };
+    ViewData["Title"] = c is null ? titulo : $"{titulo} · {c.ViagemId}";
+    var operadores = ViewBag.Operadores as List<LookupItem> ?? [];
+    var paragens = ViewBag.Paragens as List<LookupItem> ?? [];
+    var anoVigente = ViewBag.AnoVigente as int? ?? DateTime.Today.Year;
+    var min = ViewBag.Min as DateOnly? ?? DateOnly.FromDateTime(DateTime.Today);
+    var max = ViewBag.Max as DateOnly? ?? min;
+    var calendario = ViewBag.Calendario as List<string> ?? [];
+    var diasSemana = new[] { (1, "Seg"), (2, "Ter"), (3, "Qua"), (4, "Qui"), (5, "Sex"), (6, "Sáb"), (0, "Dom") };
 }
-<div class="page-header"><h1>Pedido de alteração <span class="text-primary">@c.ViagemId</span></h1></div>
+<div class="page-header"><h1><i class="bi @icone"></i> @titulo @if (c is not null) { <span class="text-primary">@c.ViagemId</span> }</h1></div>
 
-<form asp-action="Criar" method="post" class="card card-form" style="max-width: 760px">
+<form asp-action="Criar" method="post" class="card card-form" style="max-width: @(Model.Tipo == TipoPedido.NovaCirculacao ? "1200px" : "860px")">
     <div class="card-body">
+        <input type="hidden" asp-for="Tipo" />
         <input type="hidden" asp-for="CirculacaoId" />
         <div asp-validation-summary="ModelOnly" class="text-danger"></div>
-        <p class="small text-muted">Chegada / partida no TIC em vigor: <strong>@(c.Chegada?.ToString("HH:mm") ?? "–") / @(c.Partida?.ToString("HH:mm") ?? "–")</strong>.
-            O pedido é analisado pela gestão do TIC, que faz a alteração na circulação.</p>
-        <div class="row g-3">
-            <div class="col-12">
-                <label asp-for="Descricao" class="form-label"></label>
-                <textarea asp-for="Descricao" class="form-control" rows="4" placeholder="Ex.: alterar a partida para 08:15 a partir de 1 de dezembro; deixa de se realizar aos domingos…"></textarea>
-                <span asp-validation-for="Descricao" class="text-danger small"></span>
+
+        @if (Model.Tipo == TipoPedido.NovaCirculacao)
+        {
+            <p class="small text-muted">O pedido é analisado pela gestão do TIC. Quando aceite, a circulação é criada com um novo ID TIC
+                e uma nova declaração (DCP).</p>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label asp-for="OperadorId" class="form-label"></label>
+                    <ejs-dropdownlist id="OperadorId" name="OperadorId" dataSource="@operadores" value="@(Model.OperadorId == 0 ? null : Model.OperadorId.ToString())"
+                                      placeholder="Escolha o operador…" allowFiltering="true" filterType="Contains">
+                        <e-dropdownlist-fields text="Text" value="Value"></e-dropdownlist-fields>
+                    </ejs-dropdownlist>
+                    <span asp-validation-for="OperadorId" class="text-danger small"></span>
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="ViagemId" class="form-label"></label>
+                    <input asp-for="ViagemId" class="form-control" />
+                    <span asp-validation-for="ViagemId" class="text-danger small"></span>
+                </div>
+                <div class="col-md-3">
+                    <label asp-for="LinhaId" class="form-label"></label>
+                    <input asp-for="LinhaId" class="form-control" />
+                </div>
+                <div class="col-md-9">
+                    <label asp-for="DesignacaoLinha" class="form-label"></label>
+                    <input asp-for="DesignacaoLinha" class="form-control" />
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="OrigemId" class="form-label"></label>
+                    <ejs-dropdownlist id="OrigemId" name="OrigemId" dataSource="@paragens" value="@Model.OrigemId?.ToString()"
+                                      placeholder="Escolha a paragem…" allowFiltering="true" filterType="Contains" showClearButton="true">
+                        <e-dropdownlist-fields text="Text" value="Value"></e-dropdownlist-fields>
+                    </ejs-dropdownlist>
+                    <span asp-validation-for="OrigemId" class="text-danger small"></span>
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="DestinoId" class="form-label"></label>
+                    <ejs-dropdownlist id="DestinoId" name="DestinoId" dataSource="@paragens" value="@Model.DestinoId?.ToString()"
+                                      placeholder="Escolha a paragem…" allowFiltering="true" filterType="Contains" showClearButton="true">
+                        <e-dropdownlist-fields text="Text" value="Value"></e-dropdownlist-fields>
+                    </ejs-dropdownlist>
+                    <span asp-validation-for="DestinoId" class="text-danger small"></span>
+                </div>
+                <div class="col-md-3">
+                    <label asp-for="NovaChegada" class="form-label">Chegada ao TIC</label>
+                    <input asp-for="NovaChegada" type="time" class="form-control" value="@Model.NovaChegada?.ToString("HH:mm")" />
+                </div>
+                <div class="col-md-3">
+                    <label asp-for="NovaPartida" class="form-label">Partida do TIC</label>
+                    <input asp-for="NovaPartida" type="time" class="form-control" value="@Model.NovaPartida?.ToString("HH:mm")" />
+                    <span asp-validation-for="NovaPartida" class="text-danger small"></span>
+                </div>
+                <div class="col-12">
+                    <div class="border rounded p-2">
+                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                            <span class="fw-semibold">Calendário @anoVigente <span class="badge text-bg-success" id="calContador"></span></span>
+                            <span class="small text-muted">Os pedidos de nova circulação são para o ano em vigor (@anoVigente), de @min.ToString("dd/MM/yyyy") a @max.ToString("dd/MM/yyyy").</span>
+                        </div>
+                        @if (min > max)
+                        {
+                            <div class="alert alert-warning small mb-2">O ano @anoVigente já terminou: aguarde a renovação das declarações para @(anoVigente + 1).</div>
+                        }
+                        <div class="row g-2 align-items-end small mb-2">
+                            <div class="col-auto"><label class="form-label mb-0" for="calDe">De</label><input type="date" class="form-control form-control-sm" id="calDe" value="@min.ToString("yyyy-MM-dd")" min="@min.ToString("yyyy-MM-dd")" max="@max.ToString("yyyy-MM-dd")" /></div>
+                            <div class="col-auto"><label class="form-label mb-0" for="calAte">Até</label><input type="date" class="form-control form-control-sm" id="calAte" value="@max.ToString("yyyy-MM-dd")" min="@min.ToString("yyyy-MM-dd")" max="@max.ToString("yyyy-MM-dd")" /></div>
+                            <div class="col-auto">
+                                @foreach (var (n, nome) in diasSemana)
+                                {
+                                    <div class="form-check form-check-inline me-2">
+                                        <input class="form-check-input cal-semana" type="checkbox" value="@n" id="sem@(n)" checked />
+                                        <label class="form-check-label" for="sem@(n)">@nome</label>
+                                    </div>
+                                }
+                            </div>
+                            <div class="col-auto d-flex gap-1">
+                                <button type="button" class="btn btn-sm btn-outline-success" onclick="calPeriodo(true)"><i class="bi bi-plus-lg"></i> Marcar</button>
+                                <button type="button" class="btn btn-sm btn-outline-danger" onclick="calPeriodo(false)"><i class="bi bi-dash-lg"></i> Desmarcar</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="calendario.limpar()">Limpar</button>
+                            </div>
+                        </div>
+                        <div class="form-text mt-0 mb-2">Marque o período e os dias da semana e ajuste dia a dia no calendário (clique num dia para marcar/desmarcar; no nome do mês, o mês todo).</div>
+                        <input type="hidden" name="calendario" id="calendarioDias" />
+                        <div id="calendarioAno"></div>
+                        <span asp-validation-for="DataInicio" class="text-danger small d-block"></span>
+                        @if (ViewData.ModelState["Calendario"]?.Errors is { Count: > 0 } erros)
+                        {
+                            <span class="text-danger small d-block">@erros[0].ErrorMessage</span>
+                        }
+                    </div>
+                </div>
+                <div class="col-12">
+                    <label asp-for="Descricao" class="form-label"></label>
+                    <textarea asp-for="Descricao" class="form-control" rows="3" placeholder="Ex.: novo serviço Porto–Braga; paragens intermédias…"></textarea>
+                    <span asp-validation-for="Descricao" class="text-danger small"></span>
+                </div>
             </div>
-            <div class="col-md-3">
-                <label asp-for="DataInicio" class="form-label"></label>
-                <input asp-for="DataInicio" type="date" class="form-control" />
+        }
+        else if (Model.Tipo == TipoPedido.Remocao)
+        {
+            <input type="hidden" asp-for="OperadorId" />
+            <p class="small text-muted">Informe a partir de que dia a circulação <strong>@c?.ViagemId</strong> deixa de se realizar.
+                Quando aceite, os dias a partir dessa data saem do calendário e a declaração (DCP) passa a uma nova versão.</p>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label asp-for="DataInicio" class="form-label">Deixa de se realizar a partir de</label>
+                    <input asp-for="DataInicio" type="date" class="form-control" />
+                    <span asp-validation-for="DataInicio" class="text-danger small"></span>
+                </div>
+                <div class="col-12">
+                    <label asp-for="Descricao" class="form-label">Motivo</label>
+                    <textarea asp-for="Descricao" class="form-control" rows="3" placeholder="Ex.: serviço suprimido…"></textarea>
+                    <span asp-validation-for="Descricao" class="text-danger small"></span>
+                </div>
             </div>
-            <div class="col-md-3">
-                <label asp-for="DataFim" class="form-label"></label>
-                <input asp-for="DataFim" type="date" class="form-control" />
-                <span asp-validation-for="DataFim" class="text-danger small"></span>
+        }
+        else
+        {
+            <input type="hidden" asp-for="OperadorId" />
+            <p class="small text-muted">Chegada / partida no TIC em vigor: <strong>@(c?.Chegada?.ToString("HH:mm") ?? "–") / @(c?.Partida?.ToString("HH:mm") ?? "–")</strong>.
+                O pedido é analisado pela gestão do TIC. Uma mudança de horário aceite passa a declaração (DCP) a uma nova versão.</p>
+            <div class="row g-3">
+                <div class="col-12">
+                    <label asp-for="Descricao" class="form-label">Alteração pretendida</label>
+                    <textarea asp-for="Descricao" class="form-control" rows="4" placeholder="Ex.: alterar a partida para 08:15 a partir de 1 de dezembro…"></textarea>
+                    <span asp-validation-for="Descricao" class="text-danger small"></span>
+                </div>
+                <div class="col-md-3">
+                    <label asp-for="DataInicio" class="form-label"></label>
+                    <input asp-for="DataInicio" type="date" class="form-control" />
+                </div>
+                <div class="col-md-3">
+                    <label asp-for="DataFim" class="form-label"></label>
+                    <input asp-for="DataFim" type="date" class="form-control" />
+                    <span asp-validation-for="DataFim" class="text-danger small"></span>
+                </div>
+                <div class="col-md-3">
+                    <label asp-for="NovaChegada" class="form-label"></label>
+                    <input asp-for="NovaChegada" type="time" class="form-control" value="@Model.NovaChegada?.ToString("HH:mm")" />
+                </div>
+                <div class="col-md-3">
+                    <label asp-for="NovaPartida" class="form-label"></label>
+                    <input asp-for="NovaPartida" type="time" class="form-control" value="@Model.NovaPartida?.ToString("HH:mm")" />
+                </div>
             </div>
-            <div class="col-md-3">
-                <label asp-for="NovaChegada" class="form-label"></label>
-                <input asp-for="NovaChegada" type="time" class="form-control" value="@Model.NovaChegada?.ToString("HH:mm")" />
-            </div>
-            <div class="col-md-3">
-                <label asp-for="NovaPartida" class="form-label"></label>
-                <input asp-for="NovaPartida" type="time" class="form-control" value="@Model.NovaPartida?.ToString("HH:mm")" />
-            </div>
-        </div>
-        <div class="form-text mt-2">Datas e horas são opcionais; use-as quando o pedido é uma mudança de horário no TIC.</div>
+            <div class="form-text mt-2">Datas e horas são opcionais; com elas, o pedido pode ser aplicado automaticamente quando aceite.</div>
+        }
     </div>
     <div class="card-footer d-flex gap-2">
         <button type="submit" class="btn btn-primary"><i class="bi bi-send"></i> Enviar pedido</button>
-        <a asp-controller="Circulacoes" asp-action="Details" asp-route-id="@c.Id" class="btn btn-outline-secondary">Cancelar</a>
+        @if (c is not null)
+        {
+            <a asp-controller="Circulacoes" asp-action="Details" asp-route-id="@c.Id" class="btn btn-outline-secondary">Cancelar</a>
+        }
+        else
+        {
+            <a asp-action="Index" class="btn btn-outline-secondary">Cancelar</a>
+        }
     </div>
 </form>
+
+@section Scripts {
+    @if (Model.Tipo == TipoPedido.NovaCirculacao)
+    {
+        <script src="~/js/calendario-ano.js" asp-append-version="true"></script>
+        <script>
+            const calendario = appTic.calendarioAno(document.getElementById("calendarioAno"), {
+                ano: @anoVigente, min: "@min.ToString("yyyy-MM-dd")", max: "@max.ToString("yyyy-MM-dd")",
+                dias: @Json.Serialize(calendario),
+                input: document.getElementById("calendarioDias"), contador: document.getElementById("calContador")
+            });
+            function calPeriodo(marcar) {
+                const semana = [...document.querySelectorAll(".cal-semana:checked")].map(x => +x.value);
+                const datas = appTic.datasEntre(document.getElementById("calDe").value, document.getElementById("calAte").value, semana);
+                if (semana.length === 0) return;
+                marcar ? calendario.adicionar(datas) : calendario.retirar(datas);
+            }
+        </script>
+    }
+}

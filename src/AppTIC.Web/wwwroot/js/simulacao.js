@@ -3,10 +3,12 @@
 
     const root = document.getElementById('simulacao');
     const el = id => document.getElementById(id);
-    const zonas = SimulacaoPlaneador.zonas;
-    const caisComuns = SimulacaoPlaneador.caisComuns;
-    const cores = { Lisboa: '#3b82f6', Internacional: '#f59e0b', Norte: '#a855f7', Comum: '#10b981' };
-    const rotulos = { Lisboa: 'Lisboa', Internacional: 'Internacional', Norte: 'Norte de Portugal', Comum: 'Comum' };
+    const ordemSaida = SimulacaoPlanta.ordemSaida;
+    const numerosCais = SimulacaoPlanta.cais.map(c => c.id);
+    const caisPorId = new Map(SimulacaoPlanta.cais.map(c => [c.id, c]));
+    const CHAVE_CONFIG = 'apptic.simulacao.zonamento.v1';
+    const nomesModo = { Regiao: 'por região', Permanencia: 'por tempo de permanência' };
+    const paleta = ['#06b6d4', '#ec4899', '#84cc16', '#f97316', '#8b5cf6', '#14b8a6', '#f43f5e', '#0ea5e9'];
     const canvas = el('sim-canvas');
     const ctx = canvas.getContext('2d');
 
@@ -21,6 +23,69 @@
     let versaoPlaneamento = 0;
     let temporizadorPlaneamento = null;
     let assinaturaPainel = '';
+    let filas = new Map();
+    let filasDe = null;
+    let indicadoresDe = null;
+    let config = carregarConfig();
+
+    /** Zonamento (modo e tipologias dos cais): fica guardado neste browser, nunca na base de dados. */
+    function carregarConfig() {
+        const omissao = { modo: 'Regiao', esquemas: SimulacaoPlaneador.esquemasPorOmissao(ordemSaida) };
+        try {
+            const guardado = JSON.parse(globalThis.localStorage?.getItem(CHAVE_CONFIG) ?? 'null');
+            const valido = guardado && Object.hasOwn(omissao.esquemas, guardado.modo) &&
+                Object.keys(omissao.esquemas).every(m => Array.isArray(guardado.esquemas?.[m]?.categorias) && typeof guardado.esquemas[m].cais === 'object');
+            if (valido) return guardado;
+        } catch { /* configuração ilegível: usa a predefinida */ }
+        return omissao;
+    }
+
+    function guardarConfig() {
+        try { globalThis.localStorage?.setItem(CHAVE_CONFIG, JSON.stringify(config)); } catch { /* sem armazenamento local */ }
+    }
+
+    const esquema = () => config.esquemas[config.modo];
+    const categoria = id => SimulacaoPlaneador.categoriaDe(esquema(), id);
+    const cor = id => categoria(id)?.cor ?? '#64748b';
+    const rotulo = id => categoria(id)?.nome ?? 'Não atribuída';
+    const caisDe = id => SimulacaoPlaneador.caisDaCategoria(esquema(), id);
+    const minutosDe = v => (v.FimSegundos - v.InicioSegundos) / 60;
+
+    /** Zona que a circulação recebe sem intervenção: a sua categoria (por região) ou a do tempo de paragem. */
+    function zonaAutomatica(v) {
+        if (esquema().criterio === 'Permanencia') return SimulacaoPlaneador.categoriaPorPermanencia(esquema(), minutosDe(v));
+        return categoria(v.Categoria ?? '') ? v.Categoria : '';
+    }
+
+    /** Zona simulada: a escolhida à mão neste modo de zonamento ou, sem escolha, a automática. */
+    function zonaDe(v) {
+        const manual = v.manual[config.modo];
+        if (manual === undefined) return zonaAutomatica(v);
+        return manual === '' || categoria(manual) ? manual : '';
+    }
+
+    /** [1, 2, 3, 4, 9] → "1–4, 9". */
+    function formatarCais(lista) {
+        const partes = [];
+        const ordenada = [...lista].sort((a, b) => a - b);
+        for (let i = 0; i < ordenada.length; i++) {
+            let j = i;
+            while (ordenada[j + 1] === ordenada[j] + 1) j++;
+            partes.push(j > i ? `${ordenada[i]}–${ordenada[j]}` : String(ordenada[i]));
+            i = j;
+        }
+        return partes.join(', ') || '—';
+    }
+
+    function filasAtuais() {
+        if (filasDe !== alocacoes) {
+            filas = SimulacaoPlanta.filas(viagens
+                .filter(v => alocacoes.get(v.Id) != null && v.FimSegundos > v.InicioSegundos)
+                .map(v => ({ id: v.Id, cais: caisPorId.get(alocacoes.get(v.Id)), inicio: v.InicioSegundos, fim: v.FimSegundos })));
+            filasDe = alocacoes;
+        }
+        return filas;
+    }
 
     function hora(segundos) {
         const dia = Math.floor(segundos / 86400);
@@ -69,14 +134,15 @@
     }
 
     function caisPermitidos(zona) {
-        return [...zonas[zona], ...caisComuns];
+        const o = SimulacaoPlaneador.opcoes(esquema(), zona, ordemSaida);
+        return [...o.primarios, ...o.reserva, ...o.outros];
     }
 
     /** Cais que não pode mudar ao replanear: atracado manualmente ou já ocupado à hora simulada. */
     function caisFixo(v) {
         const atual = alocacoes.get(v.Id);
         const fixo = v.caisAtracado ?? (tempo > 0 && v.InicioSegundos <= tempo && tempo < v.FimSegundos ? atual : null);
-        return fixo != null && caisPermitidos(v.zona).includes(fixo) ? fixo : null;
+        return fixo != null && caisPermitidos(zonaDe(v)).includes(fixo) ? fixo : null;
     }
 
     function agendarPlaneamento() {
@@ -89,10 +155,10 @@
         clearTimeout(temporizadorPlaneamento);
         const versao = ++versaoPlaneamento;
         const candidatas = viagens
-            .filter(v => Object.hasOwn(zonas, v.zona) && v.FimSegundos > v.InicioSegundos)
+            .filter(v => categoria(zonaDe(v)) && v.FimSegundos > v.InicioSegundos)
             .map(v => ({
                 AutocarroId: v.Id,
-                Zona: v.zona,
+                Categoria: zonaDe(v),
                 ChegadaMinutos: Math.floor(v.InicioSegundos / 60),
                 PartidaMinutos: Math.max(Math.floor(v.InicioSegundos / 60) + 1, Math.ceil(v.FimSegundos / 60)),
                 CaisFixo: caisFixo(v)
@@ -110,7 +176,7 @@
         el('sim-plan').disabled = true;
         el('sim-status').textContent = `A otimizar o plano do dia com Otimização (${candidatas.length} autocarros)...`;
         try {
-            const plano = await pedidoTerminal('planear-dia', 'POST', candidatas);
+            const plano = await pedidoTerminal('planear-dia', 'POST', SimulacaoPlaneador.pedido(esquema(), candidatas, ordemSaida));
             if (versao !== versaoPlaneamento) return null;
 
             const mapa = new Map(candidatas.map(c => [c.AutocarroId, null]));
@@ -120,7 +186,7 @@
 
             const semCais = viagens.filter(v => (plano.SemCais ?? []).includes(v.Id));
             el('sim-status').textContent =
-                `Plano Otimização: ${candidatas.length - semCais.length} com cais, ${semCais.length} sem cais` +
+                `Plano Otimização (${nomesModo[config.modo]}): ${candidatas.length - semCais.length} com cais, ${semCais.length} sem cais` +
                 (plano.Otimo ? ' (ótimo).' : ' (melhor solução encontrada no limite de tempo).');
             if (semCais.length)
                 mostrarAlertaLotacao(`${semCais.length} sem cais no plano: ${semCais.map(v => `${v.ViagemId} (${hora(v.InicioSegundos)})`).join(', ')}`);
@@ -131,7 +197,7 @@
             return plano;
         } catch (erro) {
             if (versao !== versaoPlaneamento) return null;
-            alocacoes = SimulacaoPlaneador.alocar(viagens);
+            alocacoes = SimulacaoPlaneador.alocar(viagens.map(v => ({ ...v, zona: zonaDe(v) })), esquema(), ordemSaida);
             el('sim-status').textContent = 'Plano provisório pela regra do primeiro cais livre (Otimização indisponível).';
             mostrarAlertaLotacao(`Otimização indisponível: ${erro.message}`);
             adicionarEvento(`[Otimização] Falha no planeamento: ${erro.message}`, true);
@@ -140,6 +206,13 @@
         } finally {
             if (versao === versaoPlaneamento) el('sim-plan').disabled = false;
         }
+    }
+
+    function opcao(valor, rotuloOpcao) {
+        const option = document.createElement('option');
+        option.value = valor;
+        option.textContent = rotuloOpcao;
+        return option;
     }
 
     function criarLista() {
@@ -165,21 +238,17 @@
             let horario = `${hora(v.InicioSegundos)} – ${hora(v.FimSegundos)}`;
             if (v.PermanenciaEstimada) horario += ' · permanência estimada';
             if (v.FimSegundos <= v.InicioSegundos) horario += ' · sem duração para simular';
+            else horario += ` · ${Math.round(minutosDe(v))} min`;
             artigo.append(texto('small', horario));
             artigo.append(texto('small', v.ForaDoPlano ? 'Carro fora do plano (despacho)' : `Categoria: ${v.Categoria || 'não indicada'}`));
 
             const label = texto('label', 'Zona simulada');
             const select = document.createElement('select');
             select.setAttribute('aria-label', `Zona simulada para ${v.ViagemId}`);
-            for (const nome of ['', ...Object.keys(zonas)]) {
-                const option = document.createElement('option');
-                option.value = nome;
-                option.textContent = rotulos[nome] ?? 'Não atribuída';
-                select.append(option);
-            }
-            select.value = v.zona;
+            for (const id of ['', ...esquema().categorias.map(c => c.id)]) select.append(opcao(id, rotulo(id)));
+            select.value = zonaDe(v);
             select.disabled = v.FimSegundos <= v.InicioSegundos;
-            select.addEventListener('change', () => { v.zona = select.value; v.caisAtracado = null; agendarPlaneamento(); });
+            select.addEventListener('change', () => { v.manual[config.modo] = select.value; v.caisAtracado = null; agendarPlaneamento(); });
             label.append(select);
             artigo.append(label);
             lista.append(artigo);
@@ -259,9 +328,9 @@
         ctx.fillStyle = '#64748b';
         ctx.fillText('GARE DE PASSAGEIROS', 670, 380);
 
+        const posicoes = filasAtuais();
         for (const cais of SimulacaoPlanta.cais) {
-            const zona = Object.keys(zonas).find(nome => zonas[nome].includes(cais.id));
-            const corCais = zona ? cores[zona] : '#10b981';
+            const corCais = cor(esquema().cais[cais.id]);
             const v = ativos.find(a => alocacoes.get(a.Id) === cais.id);
             ctx.save();
             ctx.translate(cais.x, cais.y);
@@ -273,29 +342,6 @@
             ctx.strokeRect(-cais.comprimento / 2, -cais.largura / 2, cais.comprimento, cais.largura);
             ctx.restore();
 
-            if (v) {
-                const transicao = Math.min(120, (v.FimSegundos - v.InicioSegundos) / 4);
-                const decorrido = tempo - v.InicioSegundos;
-                const restante = v.FimSegundos - tempo;
-                const entrada = SimulacaoPlanta.entrada(cais);
-                const estrada = { x: entrada.x, y: SimulacaoPlanta.ESTRADA_Y };
-                const estacionado = { x: cais.x, y: cais.y, angulo: SimulacaoPlanta.anguloEstacionado(cais) };
-                let posicao;
-                if (decorrido < transicao) {
-                    posicao = SimulacaoPlanta.pontoNoPercurso([
-                        { x: 185, y: 465 }, { x: 145, y: 410 }, { x: 100, y: 348 },
-                        { x: 190, y: 309 }, { x: 245, y: 224 }, estrada, entrada, cais
-                    ], decorrido / transicao);
-                } else if (restante < transicao) {
-                    posicao = SimulacaoPlanta.pontoNoPercurso([cais, entrada, estrada, { x: 1080, y: 224 }], 1 - restante / transicao);
-                    // Sai do cais em marcha-atrás, mantendo a orientação de estacionado.
-                    if (posicao.segmento === 0) posicao.angulo = estacionado.angulo;
-                } else {
-                    posicao = estacionado;
-                }
-                desenharAutocarro(posicao.x, posicao.y, posicao.angulo, v.ForaDoPlano ? '#f43f5e' : cores[v.zona]);
-            }
-
             ctx.textAlign = 'center';
             ctx.fillStyle = corCais;
             ctx.font = 'bold 12px sans-serif';
@@ -304,6 +350,105 @@
             ctx.font = '11px sans-serif';
             ctx.fillText(v ? v.ViagemId : 'Livre', cais.x, cais.id <= 8 ? cais.y + 38 : cais.y + 50, 80);
         }
+
+        // Autocarros por cima da planta: na via seguem em fila indiana, sem se sobreporem.
+        for (const v of ativos) {
+            const posicao = SimulacaoPlanta.posicao(posicoes.get(v.Id), tempo);
+            if (posicao) desenharAutocarro(posicao.x, posicao.y, posicao.angulo, v.ForaDoPlano ? '#f43f5e' : cor(zonaDe(v)));
+        }
+    }
+
+    /** Indicadores do plano do dia; só recalcula quando o plano muda. */
+    function renderIndicadores() {
+        if (indicadoresDe === alocacoes) return;
+        indicadoresDe = alocacoes;
+        const grupos = el('sim-kpis');
+        const horas = el('sim-kpi-horas');
+        grupos.replaceChildren();
+        horas.replaceChildren();
+
+        const comDuracao = viagens.filter(v => alocacoes.has(v.Id) && v.FimSegundos > v.InicioSegundos);
+        const k = SimulacaoIndicadores.calcular({
+            passagens: comDuracao.filter(v => alocacoes.get(v.Id) != null).map(v => ({
+                id: v.Id, inicio: v.InicioSegundos, fim: v.FimSegundos, cais: alocacoes.get(v.Id),
+                limiteMinutos: categoria(esquema().cais[alocacoes.get(v.Id)])?.ateMinutos ?? null
+            })),
+            semCais: comDuracao.filter(v => alocacoes.get(v.Id) == null).length,
+            totalCais: numerosCais.length,
+            filas: filasAtuais()
+        });
+        el('sim-kpi-nota').textContent = k ? `${k.veiculos} veículos com cais · zonamento ${nomesModo[config.modo]}` : '';
+        if (!k) {
+            grupos.append(texto('p', 'Sem plano para calcular indicadores.', 'sim-empty'));
+            return;
+        }
+
+        const num = (valor, casas = 1) => valor.toLocaleString('pt-PT', { minimumFractionDigits: casas, maximumFractionDigits: casas });
+        const pct = valor => `${num(valor * 100, 0)} %`;
+        const seg = valor => valor >= 90 ? `${num(valor / 60)} min` : `${num(valor, 0)} s`;
+        const hh = h => `${String(h).padStart(2, '0')}h`;
+        const grupo = (titulo, cartoes) => {
+            const secao = document.createElement('div');
+            secao.className = 'sim-kpi-grupo';
+            const lista = document.createElement('div');
+            lista.className = 'sim-kpi-cartoes';
+            for (const [nome, valor, detalhe, estado] of cartoes) {
+                const cartao = document.createElement('div');
+                cartao.className = `sim-kpi${estado ? ` ${estado}` : ''}`;
+                cartao.append(texto('span', nome, 'sim-kpi-nome'), texto('strong', valor), texto('small', detalhe));
+                lista.append(cartao);
+            }
+            secao.append(texto('h3', titulo), lista);
+            return secao;
+        };
+
+        const ocupacao = k.taxaOcupacaoMaxima;
+        grupos.append(
+            grupo('Rotação e capacidade', [
+                ['Índice de rotação', `${num(k.rotacaoDia)} veíc./cais`,
+                    `no dia · média ${num(k.rotacaoHora, 2)}/h · pico ${num(k.rotacaoHoraPico, 2)}/h às ${hh(k.horaPico)}`],
+                ['Tempo médio de permanência', `${num(k.permanenciaMedia)} min`, `máximo ${num(k.permanenciaMaxima, 0)} min`],
+                ['Taxa de ocupação máxima', pct(ocupacao),
+                    `${k.ocupacaoMaxima} de ${k.totalCais} cais às ${hora(k.instanteOcupacaoMaxima).slice(0, 5)} · ${num(k.minutosAcimaDoLimiar, 0)} min do dia acima de 90 % (ideal: 85–90 %)`,
+                    ocupacao > 0.9 ? 'mau' : ocupacao >= 0.85 ? 'aviso' : 'bom']
+            ]),
+            grupo('Fluidez e atrito', [
+                ['Tempo de fila na entrada', seg(k.filaEntradaMedia), `em média · máximo ${seg(k.filaEntradaMaxima)}`,
+                    k.filaEntradaMaxima > 120 ? 'aviso' : ''],
+                ['Tempo de fila na saída', seg(k.filaSaidaMedia), `em média · máximo ${seg(k.filaSaidaMaxima)} (antecipação para sair em fila)`,
+                    k.filaSaidaMaxima > 120 ? 'aviso' : ''],
+                ['Bloqueio do canal por manobras', `${seg(k.bloqueioMedioHora)}/h`,
+                    `em média · pior hora ${hh(k.horaBloqueioMaximo)}: ${seg(k.bloqueioMaximoHora)}`],
+                ['Taxa de paragem indevida', pct(k.taxaParagemIndevida),
+                    `${k.semCais} veículos sem cais no plano (parariam no canal)`, k.semCais ? 'mau' : 'bom']
+            ]),
+            grupo('Processamento', [
+                ['Volume processado na hora de ponta', `${k.throughputPico} veíc./h`,
+                    `às ${hh(k.horaPico)} · média ${num(k.throughputMedio)}/h · capacidade teórica ${num(k.capacidadeHora, 0)}/h (${pct(k.usoDaCapacidade)} usada)`,
+                    k.usoDaCapacidade > 0.9 ? 'mau' : k.usoDaCapacidade >= 0.85 ? 'aviso' : ''],
+                ['Desvio ao tempo previsto', k.desvio == null ? 'n/d' : pct(k.desvio),
+                    k.desvio == null ? 'só com categorias com limite de tempo (zonamento por permanência)'
+                        : `dos ${k.veiculosComLimite} veículos em cais com limite, os que ficam mais tempo do que o da categoria do cais`,
+                    k.desvio == null ? '' : k.desvio > 0.1 ? 'aviso' : 'bom']
+            ]));
+
+        const maximo = Math.max(1, ...k.entradasPorHora);
+        k.entradasPorHora.forEach((entradas, h) => {
+            const coluna = document.createElement('div');
+            coluna.className = 'sim-kpi-hora';
+            coluna.title = `${hh(h)}: ${entradas} entradas · ocupação máxima ${k.ocupacaoPorHora[h]} de ${k.totalCais} cais`;
+            const barra = document.createElement('div');
+            barra.className = `sim-kpi-barra${k.ocupacaoPorHora[h] > k.totalCais * 0.9 ? ' mau' : ''}`;
+            barra.style?.setProperty('height', `${entradas / maximo * 100}%`);
+            const traco = document.createElement('div');
+            traco.className = 'sim-kpi-traco';
+            traco.style?.setProperty('bottom', `${k.ocupacaoPorHora[h] / k.totalCais * 100}%`);
+            const area = document.createElement('div');
+            area.className = 'sim-kpi-area';
+            area.append(barra, traco);
+            coluna.append(texto('span', entradas ? String(entradas) : '', 'sim-kpi-valor'), area, texto('span', String(h).padStart(2, '0')));
+            horas.append(coluna);
+        });
     }
 
     function atualizar() {
@@ -316,12 +461,12 @@
 
         const resumo = el('sim-summary');
         resumo.replaceChildren();
-        for (const zona of Object.keys(zonas)) {
-            const numero = ocupados.filter(v => zonas[zona].includes(alocacoes.get(v.Id))).length;
-            resumo.append(texto('span', `${rotulos[zona]}: ${numero} / ${zonas[zona].length}`));
+        for (const c of esquema().categorias) {
+            const numero = ocupados.filter(v => esquema().cais[alocacoes.get(v.Id)] === c.id).length;
+            resumo.append(texto('span', `${c.nome}: ${numero} / ${caisDe(c.id).length}`));
         }
-        const emReserva = ocupados.filter(v => v.zona !== 'Comum' && caisComuns.includes(alocacoes.get(v.Id))).length;
-        resumo.append(texto('span', `Zonas lotadas nos cais comuns: ${emReserva}`));
+        const foraDaCategoria = ocupados.filter(v => esquema().cais[alocacoes.get(v.Id)] !== zonaDe(v)).length;
+        resumo.append(texto('span', `Fora dos cais da sua categoria: ${foraDaCategoria}`));
 
         el('sim-conflicts').textContent = semCais.length
             ? `Sem cais na simulação (${semCais.length}): ${semCais.map(v => v.ViagemId).join(', ')}`
@@ -329,13 +474,14 @@
 
         pintarMapa(ocupados);
         renderPainelCais(ocupados);
+        renderIndicadores();
 
         if (caisSelecionado !== null) {
             const v = ocupados.find(a => alocacoes.get(a.Id) === caisSelecionado);
-            const reserva = caisComuns.includes(caisSelecionado) ? ' (cais comum)' : '';
+            const tipologia = ` (${rotulo(esquema().cais[caisSelecionado])})`;
             el('sim-inspector').textContent = v
-                ? `Cais ${caisSelecionado}: ${v.ViagemId} · ${v.Operador} · ${v.zona} · ${hora(v.InicioSegundos)} – ${hora(v.FimSegundos)}${v.caisAtracado ? ' · atracado' : ''}`
-                : `Cais ${caisSelecionado}: livre na simulação${reserva}.`;
+                ? `Cais ${caisSelecionado}${tipologia}: ${v.ViagemId} · ${v.Operador} · ${rotulo(zonaDe(v))} · ${hora(v.InicioSegundos)} – ${hora(v.FimSegundos)}${v.caisAtracado ? ' · atracado' : ''}`
+                : `Cais ${caisSelecionado}${tipologia}: livre na simulação.`;
         }
     }
 
@@ -343,7 +489,7 @@
     function renderPainelCais(ocupados) {
         const painel = el('sim-bays');
         const porCais = new Map(ocupados.map(v => [alocacoes.get(v.Id), v]));
-        const assinatura = SimulacaoPlanta.cais.map(c => `${c.id}:${porCais.get(c.id)?.Id ?? ''}:${porCais.get(c.id)?.caisAtracado ?? ''}`).join('|');
+        const assinatura = SimulacaoPlanta.cais.map(c => `${c.id}:${porCais.get(c.id)?.Id ?? ''}:${porCais.get(c.id)?.caisAtracado ?? ''}:${porCais.get(c.id) ? zonaDe(porCais.get(c.id)) : ''}`).join('|');
         if (assinatura === assinaturaPainel) return;
         assinaturaPainel = assinatura;
 
@@ -353,7 +499,7 @@
             const linha = document.createElement('div');
             linha.className = 'sim-bay-row';
             const estado = v ? (v.caisAtracado ? 'Atracado' : 'Ocupado') : 'Livre';
-            const detalhe = v ? `${v.ViagemId} · ${v.zona}${v.ForaDoPlano ? ' · fora do plano' : ''}` : 'Disponível';
+            const detalhe = v ? `${v.ViagemId} · ${rotulo(zonaDe(v))}${v.ForaDoPlano ? ' · fora do plano' : ''}` : 'Disponível';
             linha.append(texto('span', `Cais ${c.id} · ${estado}`), texto('span', detalhe));
             painel.append(linha);
         }
@@ -434,14 +580,14 @@
             const dados = await resposta.json();
             if (pedido !== carregamento) return;
 
-            viagens = dados.map(v => ({ ...v, zona: Object.hasOwn(zonas, v.Categoria ?? '') ? v.Categoria : '', caisAtracado: null }));
+            viagens = dados.map(v => ({ ...v, manual: {}, caisAtracado: null }));
             criarLista();
             ['sim-play', 'sim-reset', 'sim-time', 'sim-bulk-apply', 'sim-plan'].forEach(id => { el(id).disabled = false; });
 
-            const semCategoria = viagens.filter(v => !v.zona).length;
+            const semCategoria = viagens.filter(v => !zonaDe(v)).length;
             await planear();
             if (semCategoria)
-                adicionarEvento(`${semCategoria} circulações sem categoria ficaram fora do plano; escolha-lhes uma zona.`, true);
+                adicionarEvento(`${semCategoria} circulações sem zona ficaram fora do plano; escolha-lhes uma zona.`, true);
         } catch (erro) {
             if (erro.name === 'AbortError' || pedido !== carregamento) return;
             status.className = 'sim-status error';
@@ -463,7 +609,8 @@
         let partida = lerHora(el('sim-dispatch-departure').value);
         if (chegada != null && partida != null && partida <= chegada) partida += 86400; // parte no dia seguinte
 
-        if (!id || chegada == null || partida == null || !Object.hasOwn(zonas, zona)) {
+        const automatica = zona === '*' && esquema().criterio === 'Permanencia';
+        if (!id || chegada == null || partida == null || !(automatica || categoria(zona))) {
             mostrarAlertaLotacao('Indique a matrícula, a zona e as horas de chegada e partida (HH:mm:ss).');
             adicionarEvento('Despacho rejeitado por dados inválidos.', true);
             return;
@@ -476,11 +623,11 @@
         const extra = {
             Id: `extra-${id}`, ViagemId: id, Operador: 'Fora do plano', Linha: null, Origem: null, Destino: null,
             InicioSegundos: chegada, FimSegundos: partida, PermanenciaEstimada: false, Categoria: null,
-            ForaDoPlano: true, zona, caisAtracado: null
+            ForaDoPlano: true, manual: automatica ? {} : { [config.modo]: zona }, caisAtracado: null
         };
         viagens.push(extra);
         criarLista();
-        adicionarEvento(`[Despacho] ${id} (${zona}) ${hora(chegada)} – ${hora(partida)} acrescentado ao plano.`);
+        adicionarEvento(`[Despacho] ${id} (${rotulo(zonaDe(extra))}) ${hora(chegada)} – ${hora(partida)} acrescentado ao plano.`);
 
         const plano = await planear();
         if (!plano) return;
@@ -524,6 +671,159 @@
         await planear();
     }
 
+    /** Legenda, seletores de zona e rótulos que dependem do esquema de zonamento em uso. */
+    function renderLegenda() {
+        const e = esquema();
+        const porPermanencia = e.criterio === 'Permanencia';
+        const corpo = el('sim-legenda-corpo');
+        corpo.replaceChildren();
+        let anterior = null;
+        for (const c of e.categorias) {
+            const linha = document.createElement('tr');
+            const nome = document.createElement('th');
+            const marca = document.createElement('span');
+            marca.className = 'sim-zona';
+            marca.style?.setProperty('--cor', c.cor);
+            nome.append(marca, texto('span', c.nome));
+
+            let criterio = 'Categoria da circulação ou escolha manual';
+            if (porPermanencia) {
+                criterio = c.ateMinutos != null ? `Paragens até ${c.ateMinutos} min`
+                    : anterior != null ? `Paragens com mais de ${anterior} min` : 'Restantes paragens';
+                if (c.ateMinutos != null) anterior = Math.max(anterior ?? 0, c.ateMinutos);
+                if (c.preferencia === 'Saida') criterio += ' · junto à saída';
+                if (c.preferencia === 'Fundo') criterio += ' · no fundo do canal';
+            }
+
+            const reserva = numerosCais.filter(n => e.cais[n] !== c.id && SimulacaoPlaneador.categoriaDe(e, e.cais[n])?.reserva);
+            let cheia = reserva.length ? `cais de reserva ${formatarCais(reserva)}` : '—';
+            if (e.ultimoRecurso) cheia += reserva.length ? '; depois, qualquer cais livre' : ' qualquer cais livre';
+            linha.append(nome, texto('td', formatarCais(caisDe(c.id))), texto('td', criterio), texto('td', cheia.replace(/^— /, '')));
+            corpo.append(linha);
+        }
+
+        el('sim-legenda-titulo').textContent = `Atribuição de cais ${nomesModo[config.modo]}`;
+        el('sim-map-legend').textContent = e.categorias.map(c => `${c.nome} ${formatarCais(caisDe(c.id))}`).join(' · ');
+
+        const preencher = (id, opcoes) => {
+            const select = el(id);
+            // Na primeira vez fica a primeira opção; depois mantém-se a escolha, se ainda existir.
+            const atual = select.dataset.preenchido ? select.value : null;
+            select.dataset.preenchido = '1';
+            select.replaceChildren(...opcoes.map(([valor, nome]) => opcao(valor, nome)));
+            select.value = opcoes.some(([valor]) => valor === atual) ? atual : opcoes[0]?.[0] ?? '';
+        };
+        const categorias = e.categorias.map(c => [c.id, c.nome]);
+        preencher('sim-dispatch-zone', porPermanencia ? [['*', 'Automática (pela permanência)'], ...categorias] : categorias);
+        preencher('sim-bulk-zone', [['*', porPermanencia ? 'Automática (pela permanência)' : 'Categoria da circulação'], ['', 'Sem zona'], ...categorias]);
+    }
+
+    /** Painel de gestão: categorias do esquema em uso e tipologia de cada cais. */
+    function renderConfig() {
+        const e = esquema();
+        const porPermanencia = e.criterio === 'Permanencia';
+        const campo = (rotuloCampo, controlo) => {
+            const label = texto('label', rotuloCampo);
+            label.append(controlo);
+            return label;
+        };
+        const entrada = (tipo, valor, aoMudar) => {
+            const input = document.createElement('input');
+            input.type = tipo;
+            if (tipo === 'checkbox') input.checked = !!valor; else input.value = valor ?? '';
+            input.addEventListener('change', () => { aoMudar(input); aplicarConfig(); });
+            return input;
+        };
+
+        const lista = el('sim-config-categorias');
+        lista.replaceChildren();
+        for (const c of e.categorias) {
+            const linha = document.createElement('div');
+            linha.className = 'sim-config-linha';
+            linha.append(
+                campo('Cor', entrada('color', c.cor, i => { c.cor = i.value; })),
+                campo('Nome', entrada('text', c.nome, i => { c.nome = i.value.trim() || c.nome; })));
+            if (porPermanencia) {
+                const ate = entrada('number', c.ateMinutos, i => {
+                    c.ateMinutos = i.value === '' || !Number.isFinite(Number(i.value)) ? null : Math.max(0, Number(i.value));
+                });
+                ate.min = '0';
+                ate.placeholder = 'sem limite';
+                linha.append(campo('Paragens até (min)', ate));
+            }
+            const preferencia = document.createElement('select');
+            preferencia.append(opcao('Nenhuma', 'Indiferente'), opcao('Saida', 'Junto à saída'), opcao('Fundo', 'No fundo do canal'));
+            preferencia.value = c.preferencia || 'Nenhuma';
+            preferencia.addEventListener('change', () => { c.preferencia = preferencia.value; aplicarConfig(); });
+            const remover = texto('button', 'Remover');
+            remover.type = 'button';
+            remover.disabled = e.categorias.length <= 1;
+            remover.addEventListener('click', () => {
+                e.categorias = e.categorias.filter(outra => outra !== c);
+                for (const n of numerosCais) if (e.cais[n] === c.id) delete e.cais[n];
+                aplicarConfig();
+            });
+            linha.append(
+                campo('Posição preferida', preferencia),
+                campo('Reserva das outras', entrada('checkbox', c.reserva, i => { c.reserva = i.checked; })),
+                texto('span', `Cais: ${formatarCais(caisDe(c.id))}`, 'sim-config-cais-lista'),
+                remover);
+            lista.append(linha);
+        }
+
+        const grelha = el('sim-config-cais');
+        grelha.replaceChildren();
+        for (const n of numerosCais) {
+            const select = document.createElement('select');
+            select.append(opcao('', 'Sem categoria'), ...e.categorias.map(c => opcao(c.id, c.nome)));
+            select.value = categoria(e.cais[n]) ? e.cais[n] : '';
+            select.style?.setProperty('border-color', cor(e.cais[n]));
+            select.addEventListener('change', () => {
+                if (select.value) e.cais[n] = select.value; else delete e.cais[n];
+                aplicarConfig();
+            });
+            grelha.append(campo(`Cais ${n}`, select));
+        }
+
+        el('sim-config-ultimo').checked = !!e.ultimoRecurso;
+        el('sim-config-titulo').textContent = `Gerir categorias e tipologias dos cais · zonamento ${nomesModo[config.modo]}`;
+    }
+
+    /** Depois de alterar o zonamento: guarda, redesenha e volta a planear o dia. */
+    function aplicarConfig() {
+        guardarConfig();
+        renderConfig();
+        renderLegenda();
+        criarLista();
+        assinaturaPainel = '';
+        if (viagens.length) agendarPlaneamento();
+        atualizar();
+    }
+
+    el('sim-mode').value = config.modo;
+    el('sim-mode').addEventListener('change', () => {
+        if (!Object.hasOwn(config.esquemas, el('sim-mode').value)) return;
+        config.modo = el('sim-mode').value;
+        viagens.forEach(v => { v.caisAtracado = null; });
+        aplicarConfig();
+    });
+    el('sim-config-add').addEventListener('click', () => {
+        const e = esquema();
+        e.categorias.push({
+            id: `cat-${Date.now().toString(36)}`, nome: `Nova categoria ${e.categorias.length + 1}`,
+            cor: paleta[e.categorias.length % paleta.length], reserva: false, preferencia: 'Nenhuma', ateMinutos: null
+        });
+        aplicarConfig();
+    });
+    el('sim-config-ultimo').addEventListener('change', () => { esquema().ultimoRecurso = !!el('sim-config-ultimo').checked; aplicarConfig(); });
+    el('sim-config-reset').addEventListener('click', () => {
+        config.esquemas[config.modo] = SimulacaoPlaneador.esquemasPorOmissao(ordemSaida)[config.modo];
+        viagens.forEach(v => { delete v.manual[config.modo]; });
+        aplicarConfig();
+    });
+    renderConfig();
+    renderLegenda();
+
     el('sim-load').addEventListener('click', carregar);
     el('sim-plan').addEventListener('click', () => planear());
     el('sim-date').addEventListener('change', carregar);
@@ -566,7 +866,8 @@
         const zona = el('sim-bulk-zone').value;
         viagens.forEach(v => {
             if (v.ForaDoPlano) return;
-            v.zona = zona === '*' ? (Object.hasOwn(zonas, v.Categoria ?? '') ? v.Categoria : '') : zona;
+            if (zona === '*') delete v.manual[config.modo];
+            else v.manual[config.modo] = zona;
             v.caisAtracado = null;
         });
         criarLista();

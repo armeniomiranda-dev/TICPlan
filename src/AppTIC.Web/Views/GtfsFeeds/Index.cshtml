@@ -97,7 +97,6 @@
             (function () {
                 const feeds = @Json.Serialize(mapaFeeds);
                 const url = '@Url.Action("Mapa")';
-                const cores = ['#0d6efd', '#198754', '#fd7e14', '#6f42c1', '#20c997', '#d63384', '#0dcaf0', '#6c757d', '#ffc107', '#795548'];
                 const card = document.getElementById('mapaGeralCard');
                 const estado = document.getElementById('mapaEstado');
                 const chkShapes = document.getElementById('mapaShapes');
@@ -110,7 +109,7 @@
                     mapa = gtfsMapa(document.getElementById('mapa'), document.getElementById('mapaPopup'));
                     const legenda = document.getElementById('mapaOperadores');
                     const camadas = feeds.map((f, i) => {
-                        const cor = cores[i % cores.length];
+                        const cor = f.cor; // cor do operador (ou do grupo)
                         const c = mapa.camada(cor, f.operador);
                         const id = 'mapaOp' + f.id;
                         legenda.insertAdjacentHTML('beforeend',

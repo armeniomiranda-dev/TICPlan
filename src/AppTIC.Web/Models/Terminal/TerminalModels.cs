@@ -44,3 +44,36 @@ public record NovaChegadaRequest(
 
 /// <summary>Resultado do planeamento do dia: cais atribuídos e autocarros que não couberam.</summary>
 public record PlaneamentoDia(IReadOnlyList<AlocacaoResposta> Alocacoes, IReadOnlyList<string> SemCais, bool Otimo);
+
+/// <summary>Preferência de posição dentro da categoria: junto à saída (paragens rápidas) ou no fundo do canal (esperas longas).</summary>
+public enum PreferenciaCais
+{
+    Nenhuma,
+    Saida,
+    Fundo
+}
+
+/// <summary>Tipologia de cais configurável na simulação: os cais de uma categoria de reserva recebem o excesso das outras.</summary>
+public record CategoriaCaisDto(
+    [property: JsonRequired] string Id,
+    [property: JsonRequired] IReadOnlyList<int> Cais,
+    bool Reserva = false,
+    PreferenciaCais Preferencia = PreferenciaCais.Nenhuma);
+
+public record AutocarroPlanoDto(
+    [property: JsonRequired] string AutocarroId,
+    [property: JsonRequired] string Categoria,
+    [property: JsonRequired] int ChegadaMinutos,
+    [property: JsonRequired] int PartidaMinutos,
+    int? CaisFixo = null);
+
+/// <summary>
+/// Pedido de planeamento com categorias configuráveis (por região ou por tempo de permanência).
+/// UltimoRecurso: permite, em último caso, um cais de outra categoria.
+/// OrdemSaida: os cais, do mais próximo ao mais distante da saída.
+/// </summary>
+public record PlaneamentoPedido(
+    [property: JsonRequired] IReadOnlyList<CategoriaCaisDto> Categorias,
+    [property: JsonRequired] IReadOnlyList<AutocarroPlanoDto> Autocarros,
+    bool UltimoRecurso = false,
+    IReadOnlyList<int>? OrdemSaida = null);

@@ -10,6 +10,10 @@
     {
         <a class="btn btn-primary" asp-action="Create"><i class="bi bi-plus-lg"></i> Nova circulação</a>
     }
+    else
+    {
+        <a class="btn btn-primary" asp-controller="Pedidos" asp-action="Criar" asp-route-tipo="@TipoPedido.NovaCirculacao"><i class="bi bi-plus-circle"></i> Pedido de nova circulação</a>
+    }
 </div>
 
 @if (importacaoId is not null)

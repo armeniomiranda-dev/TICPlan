@@ -32,6 +32,9 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Importacao> Importacoes => Set<Importacao>();
     public DbSet<RegistoAtividade> Registos => Set<RegistoAtividade>();
     public DbSet<PedidoAlteracao> PedidosAlteracao => Set<PedidoAlteracao>();
+    public DbSet<Declaracao> Declaracoes => Set<Declaracao>();
+    public DbSet<DeclaracaoVersao> DeclaracaoVersoes => Set<DeclaracaoVersao>();
+    public DbSet<DeclaracaoCirculacao> DeclaracaoCirculacoes => Set<DeclaracaoCirculacao>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -49,6 +52,35 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         {
             e.HasIndex(x => new { x.OwnerId, x.Nif }).IsUnique();
             e.Property(x => x.Ambito).HasConversion<string>().HasMaxLength(30);
+            e.HasOne(x => x.Grupo).WithMany(g => g.Membros).HasForeignKey(x => x.GrupoId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        b.Entity<Declaracao>(e =>
+        {
+            e.ToTable("declaracoes");
+            e.HasIndex(x => new { x.Ano, x.Numero }).IsUnique();
+            e.Ignore(x => x.Codigo);
+            e.HasOne(x => x.Operador).WithMany().HasForeignKey(x => x.OperadorId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(x => x.Anterior).WithOne(x => x.Renovacao).HasForeignKey<Declaracao>(x => x.AnteriorId).OnDelete(DeleteBehavior.SetNull);
+            // Visível ao utilizador do operador quando tem (ou tinha, num ano encerrado) circulações suas, ou é o declarante.
+            e.HasQueryFilter(x => _isAdmin || x.OperadorId == _operadorId || Set<Circulacao>().Any(c => c.DeclaracaoId == x.Id)
+                || Set<DeclaracaoCirculacao>().Any(h => h.DeclaracaoId == x.Id));
+        });
+
+        b.Entity<DeclaracaoCirculacao>(e =>
+        {
+            e.ToTable("declaracao_circulacoes");
+            e.HasKey(x => new { x.DeclaracaoId, x.CirculacaoId });
+            e.HasOne(x => x.Declaracao).WithMany(d => d.Historico).HasForeignKey(x => x.DeclaracaoId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Circulacao).WithMany().HasForeignKey(x => x.CirculacaoId).OnDelete(DeleteBehavior.Cascade);
+            e.HasQueryFilter(x => _isAdmin || x.Circulacao!.OperadorId == _operadorId || x.Circulacao.Operador!.GrupoId == _operadorId);
+        });
+
+        b.Entity<DeclaracaoVersao>(e =>
+        {
+            e.ToTable("declaracao_versoes");
+            e.HasIndex(x => new { x.DeclaracaoId, x.Versao });
+            e.HasOne(x => x.Declaracao).WithMany(d => d.Versoes).HasForeignKey(x => x.DeclaracaoId).OnDelete(DeleteBehavior.Cascade);
         });
 
         b.Entity<Paragem>(e =>
@@ -68,6 +100,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             e.HasOne(x => x.Destino).WithMany().HasForeignKey(x => x.DestinoId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(x => x.GtfsFeed).WithMany().HasForeignKey(x => x.GtfsFeedId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(x => x.Importacao).WithMany(i => i.Circulacoes).HasForeignKey(x => x.ImportacaoId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(x => x.Declaracao).WithMany(d => d.Circulacoes).HasForeignKey(x => x.DeclaracaoId).OnDelete(DeleteBehavior.SetNull);
+            e.HasIndex(x => x.IdTic);
         });
 
         b.Entity<Importacao>(e =>
@@ -83,7 +117,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             e.HasKey(x => new { x.CirculacaoId, x.Data });
             e.HasIndex(x => x.Data);
             e.HasOne(x => x.Circulacao).WithMany(c => c.Dias).HasForeignKey(x => x.CirculacaoId).OnDelete(DeleteBehavior.Cascade);
-            e.HasQueryFilter(x => _isAdmin || x.Circulacao!.OperadorId == _operadorId);
+            e.HasQueryFilter(x => _isAdmin || x.Circulacao!.OperadorId == _operadorId || x.Circulacao.Operador!.GrupoId == _operadorId);
         });
 
         b.Entity<PercursoParagem>(e =>
@@ -91,7 +125,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             e.HasKey(x => new { x.CirculacaoId, x.Sequencia });
             e.HasOne(x => x.Circulacao).WithMany(c => c.Percurso).HasForeignKey(x => x.CirculacaoId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.Paragem).WithMany().HasForeignKey(x => x.ParagemId).OnDelete(DeleteBehavior.Restrict);
-            e.HasQueryFilter(x => _isAdmin || x.Circulacao!.OperadorId == _operadorId);
+            e.HasQueryFilter(x => _isAdmin || x.Circulacao!.OperadorId == _operadorId || x.Circulacao.Operador!.GrupoId == _operadorId);
         });
 
         b.Entity<CirculacaoHorarioTic>(e =>
@@ -100,7 +134,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             e.HasIndex(x => new { x.CirculacaoId, x.DataInicio });
             e.Property(x => x.Origem).HasConversion<string>().HasMaxLength(10);
             e.HasOne(x => x.Circulacao).WithMany(c => c.HorariosTic).HasForeignKey(x => x.CirculacaoId).OnDelete(DeleteBehavior.Cascade);
-            e.HasQueryFilter(x => _isAdmin || x.Circulacao!.OperadorId == _operadorId);
+            e.HasQueryFilter(x => _isAdmin || x.Circulacao!.OperadorId == _operadorId || x.Circulacao.Operador!.GrupoId == _operadorId);
         });
 
         b.Entity<GtfsFeed>(e =>
@@ -121,10 +155,22 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         {
             e.ToTable("pedidos_alteracao");
             e.Property(x => x.Estado).HasConversion<string>().HasMaxLength(20);
+            e.Property(x => x.Tipo).HasConversion<string>().HasMaxLength(20);
             e.HasIndex(x => new { x.Estado, x.CriadoEm });
+            e.HasOne(x => x.Operador).WithMany().HasForeignKey(x => x.OperadorId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.Circulacao).WithMany().HasForeignKey(x => x.CirculacaoId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Origem).WithMany().HasForeignKey(x => x.OrigemId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(x => x.Destino).WithMany().HasForeignKey(x => x.DestinoId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(x => x.PedidoPor).WithMany().HasForeignKey(x => x.PedidoPorId).OnDelete(DeleteBehavior.Restrict);
-            e.HasQueryFilter(x => _isAdmin || x.Circulacao!.OperadorId == _operadorId);
+            e.HasQueryFilter(x => _isAdmin || x.OperadorId == _operadorId || x.Operador!.GrupoId == _operadorId);
+        });
+
+        b.Entity<PedidoDia>(e =>
+        {
+            e.ToTable("pedido_dias");
+            e.HasKey(x => new { x.PedidoId, x.Data });
+            e.HasOne(x => x.Pedido).WithMany(p => p.Dias).HasForeignKey(x => x.PedidoId).OnDelete(DeleteBehavior.Cascade);
+            e.HasQueryFilter(x => _isAdmin || x.Pedido!.OperadorId == _operadorId || x.Pedido.Operador!.GrupoId == _operadorId);
         });
 
         // Segmentação por login: cada entidade com dono só é visível ao próprio dono, ou a um Admin.
@@ -134,9 +180,9 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
         // Os utilizadores (não Admin) veem a informação do seu operador, seja qual for o login que a criou:
         // estes filtros substituem o filtro por dono acima. Os registos de atividade continuam por login.
-        b.Entity<Operador>().HasQueryFilter(x => _isAdmin || x.Id == _operadorId);
-        b.Entity<Circulacao>().HasQueryFilter(x => _isAdmin || x.OperadorId == _operadorId);
-        b.Entity<GtfsFeed>().HasQueryFilter(x => _isAdmin || x.OperadorId == _operadorId);
+        b.Entity<Operador>().HasQueryFilter(x => _isAdmin || x.Id == _operadorId || x.GrupoId == _operadorId);
+        b.Entity<Circulacao>().HasQueryFilter(x => _isAdmin || x.OperadorId == _operadorId || x.Operador!.GrupoId == _operadorId);
+        b.Entity<GtfsFeed>().HasQueryFilter(x => _isAdmin || x.OperadorId == _operadorId || x.Operador!.GrupoId == _operadorId);
         // Paragens: as usadas nas circulações do operador (origem, destino ou percurso).
         b.Entity<Paragem>().HasQueryFilter(x => _isAdmin
             || Set<Circulacao>().Any(c => c.OrigemId == x.Id || c.DestinoId == x.Id)

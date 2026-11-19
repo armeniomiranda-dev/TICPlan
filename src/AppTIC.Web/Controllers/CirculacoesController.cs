@@ -10,7 +10,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AppTIC.Web.Controllers;
 
-public class CirculacoesController(ApplicationDbContext db, ICurrentUser currentUser, IActivityLog log, GtfsFeedService gtfs) : Controller
+public class CirculacoesController(ApplicationDbContext db, ICurrentUser currentUser, IActivityLog log, GtfsFeedService gtfs,
+    NumeracaoService numeracao) : Controller
 {
     public async Task<IActionResult> Index(int? operadorId = null, int? importacaoId = null)
     {
@@ -74,6 +75,8 @@ public class CirculacoesController(ApplicationDbContext db, ICurrentUser current
 
         if (!ModelState.IsValid)
         {
+            // ID TIC e declaração não vêm do formulário (só leitura).
+            (model.IdTic, model.IdDcp, model.DeclaracaoId) = (entity.IdTic, entity.IdDcp, entity.DeclaracaoId);
             await LoadLookups(ownerId, model.Id);
             return View("Form", model);
         }
@@ -86,24 +89,34 @@ public class CirculacoesController(ApplicationDbContext db, ICurrentUser current
         entity.Autorizacao = model.Autorizacao;
         entity.AutorizacaoValidade = model.AutorizacaoValidade;
         entity.DeclaracaoCapacidade = model.DeclaracaoCapacidade;
-        entity.IdDcp = model.IdDcp;
         entity.ViagemId = model.ViagemId.Trim();
-        entity.IdTic = model.IdTic;
+        var operador = await db.Operadores.FirstAsync(o => o.Id == model.OperadorId);
+        // O ID TIC não é editável: numa nova circulação é o seguinte da numeração do operador (ou do grupo).
+        if (model.Id == 0) entity.IdTic = await numeracao.ProximoIdTicAsync(operador);
         entity.OrigemId = model.OrigemId;
         entity.DestinoId = model.DestinoId;
         // Com histórico, as horas no TIC mudam-se no detalhe (por período); sem histórico, aqui.
+        var horarioMudou = false;
         if (model.Id == 0 || !await db.CirculacaoHorariosTic.AnyAsync(h => h.CirculacaoId == model.Id))
         {
+            horarioMudou = model.Id != 0 && (entity.Chegada != model.Chegada || entity.Partida != model.Partida);
             entity.Chegada = model.Chegada;
             entity.Partida = model.Partida;
         }
         entity.TempoEmbarqueMinutos = model.TempoEmbarqueMinutos;
         entity.Comentarios = model.Comentarios;
-        if (model.Id == 0) db.Circulacoes.Add(entity);
+        if (model.Id == 0)
+        {
+            db.Circulacoes.Add(entity);
+            // Cada nova circulação dá origem a uma nova declaração (número seguinte no ano, versão 00).
+            await numeracao.AtribuirNovaDeclaracaoAsync(entity, operador, $"Nova circulação {entity.ViagemId}.");
+        }
+        else if (horarioMudou)
+            await numeracao.NovaVersaoAsync(entity, $"Horário de {entity.ViagemId}: {entity.Chegada:HH\\:mm} / {entity.Partida:HH\\:mm}.");
         await db.SaveChangesAsync();
 
         await log.LogAsync(CategoriaRegisto.Dados, model.Id == 0 ? "Criar circulação" : "Editar circulação",
-            $"Circulação {entity.ViagemId}.", ownerId: entity.OwnerId);
+            $"Circulação {entity.ViagemId} (ID TIC {entity.IdTic ?? "–"}, DCP {entity.IdDcp ?? "–"}).", ownerId: entity.OwnerId);
         TempData["Ok"] = "Circulação guardada.";
         return model.Id == 0 ? RedirectToAction(nameof(Details), new { id = entity.Id }) : RedirectToAction(nameof(Index));
     }
@@ -127,7 +140,7 @@ public class CirculacoesController(ApplicationDbContext db, ICurrentUser current
             .Include(x => x.Operador).Include(x => x.Origem).Include(x => x.Destino)
             .Include(x => x.Percurso.OrderBy(p => p.Sequencia)).ThenInclude(p => p.Paragem)
             .Include(x => x.HorariosTic.OrderByDescending(h => h.DataInicio))
-            .Include(x => x.GtfsFeed)
+            .Include(x => x.GtfsFeed).Include(x => x.Declaracao)
             .FirstOrDefaultAsync(x => x.Id == id);
         if (c is null) return NotFound();
         var tic = gtfs.ParagensTic(c.Operador).ToHashSet(StringComparer.Ordinal);
@@ -159,11 +172,12 @@ public class CirculacoesController(ApplicationDbContext db, ICurrentUser current
             return BadRequest("Indique a chegada e/ou a partida do TIC.");
 
         HorariosTic.Definir(c, req.Inicio, req.Fim, Minuto(req.Chegada), Minuto(req.Partida), OrigemHorario.Manual, DateOnly.FromDateTime(DateTime.Today));
+        var d = await numeracao.NovaVersaoAsync(c, $"Horário de {c.ViagemId} de {req.Inicio:dd/MM/yyyy} a {req.Fim:dd/MM/yyyy}.");
         await db.SaveChangesAsync();
         await log.LogAsync(CategoriaRegisto.Dados, "Horário TIC",
             $"Circulação {c.ViagemId}: de {req.Inicio:dd/MM/yyyy} a {req.Fim:dd/MM/yyyy} chegada {req.Chegada:HH\\:mm} / partida {req.Partida:HH\\:mm}.",
             ownerId: c.OwnerId);
-        return Json(new { periodos = c.HorariosTic.Count });
+        return Json(new { periodos = c.HorariosTic.Count, declaracao = d?.Codigo });
     }
 
     [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = Roles.Admin)]
@@ -173,10 +187,34 @@ public class CirculacoesController(ApplicationDbContext db, ICurrentUser current
         var p = c?.HorariosTic.FirstOrDefault(h => h.Id == periodoId);
         if (c is null || p is null) return NotFound();
         HorariosTic.Remover(c, p, DateOnly.FromDateTime(DateTime.Today));
+        await numeracao.NovaVersaoAsync(c, $"Horário de {c.ViagemId}: removido o período de {p.DataInicio:dd/MM/yyyy} a {p.DataFim:dd/MM/yyyy}.");
         await db.SaveChangesAsync();
         await log.LogAsync(CategoriaRegisto.Dados, "Horário TIC",
             $"Circulação {c.ViagemId}: removido o período de {p.DataInicio:dd/MM/yyyy} a {p.DataFim:dd/MM/yyyy}.", NivelRegisto.Aviso, ownerId: c.OwnerId);
         TempData["Ok"] = "Período removido do histórico.";
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    // ---- Declaração (DCP) e ID TIC ----
+
+    /// <summary>Atribui o ID TIC seguinte da numeração do operador (ou grupo) a uma circulação sem ID TIC.</summary>
+    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = Roles.Admin)]
+    public async Task<IActionResult> AtribuirIdTic(int id)
+    {
+        var c = await db.Circulacoes.Include(x => x.Operador).FirstOrDefaultAsync(x => x.Id == id);
+        if (c is null) return NotFound();
+        if (c.IdTic is null)
+        {
+            c.IdTic = await numeracao.ProximoIdTicAsync(c.Operador!);
+            if (c.IdTic is null)
+            {
+                TempData["Erro"] = "O operador (e o seu grupo) não tem prefixo de ID TIC: defina-o na ficha do operador.";
+                return RedirectToAction(nameof(Details), new { id });
+            }
+            await db.SaveChangesAsync();
+            await log.LogAsync(CategoriaRegisto.Dados, "ID TIC", $"Circulação {c.ViagemId}: ID TIC {c.IdTic}.", ownerId: c.OwnerId);
+            TempData["Ok"] = $"ID TIC {c.IdTic} atribuído.";
+        }
         return RedirectToAction(nameof(Details), new { id });
     }
 

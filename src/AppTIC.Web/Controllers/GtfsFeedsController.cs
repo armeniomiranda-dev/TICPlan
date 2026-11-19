@@ -25,10 +25,11 @@ public class GtfsFeedsController(ApplicationDbContext db, GtfsFeedService gtfs, 
         // Mapa geral: por operador, o feed mais recente com GTFS filtrado TIC.
         ViewBag.MapaFeeds = (await db.GtfsFeeds
                 .Where(f => f.OperadorId != null && f.CaminhoFiltrado != null && f.Estado != GtfsFeedEstado.Invalido)
-                .Select(f => new { f.Id, f.Nome, f.OperadorId, f.CriadoEm, Operador = f.Operador!.Abreviatura ?? f.Operador.Designacao })
+                .Select(f => new { f.Id, f.Nome, f.OperadorId, f.CriadoEm, Operador = f.Operador!.Abreviatura ?? f.Operador.Designacao,
+                    f.Operador.Cor, CorGrupo = f.Operador.Grupo != null ? f.Operador.Grupo.Cor : null })
                 .ToListAsync())
             .GroupBy(f => f.OperadorId).Select(g => g.MaxBy(f => f.CriadoEm)!)
-            .OrderBy(f => f.Operador).Select(f => new { id = f.Id, nome = f.Nome, operador = f.Operador })
+            .OrderBy(f => f.Operador).Select(f => new { id = f.Id, nome = f.Nome, operador = f.Operador, cor = CoresOperador.De(f.OperadorId!.Value, f.Cor, f.CorGrupo) })
             .ToList<object>();
         return View(rows);
     }

@@ -18,7 +18,7 @@ public class AdminController(UserManager<ApplicationUser> userManager, Applicati
         var users = await userManager.Users.Include(u => u.Operador).OrderBy(u => u.Email).ToListAsync();
         var admins = (await userManager.GetUsersInRoleAsync(Roles.Admin)).Select(u => u.Id).ToHashSet();
         var rows = users.Select(u => new UtilizadorRow(u.Id, u.Email ?? u.UserName ?? "", u.NomeCompleto, u.Entidade,
-            u.Operador is { } o ? o.Abreviatura ?? o.Designacao : null,
+            u.Operador is { } o ? (o.EGrupo ? "[grupo] " : "") + (o.Abreviatura ?? o.Designacao) : null,
             admins.Contains(u.Id) ? Roles.Admin : Roles.Utilizador, u.Ativo,
             u.LockoutEnd is { } end && end > DateTimeOffset.UtcNow, u.CriadoEm.ToLocalTime())).ToList();
         return View(rows);
@@ -58,9 +58,9 @@ public class AdminController(UserManager<ApplicationUser> userManager, Applicati
         // O Admin vê tudo; o operador só conta para o perfil Utilizador.
         if (model.Perfil == Roles.Admin) model.OperadorId = null;
         else if (model.OperadorId is null)
-            ModelState.AddModelError(nameof(model.OperadorId), "Indique o operador do utilizador.");
+            ModelState.AddModelError(nameof(model.OperadorId), "Indique o operador ou o grupo do utilizador.");
         else if (!await db.Operadores.AnyAsync(o => o.Id == model.OperadorId))
-            ModelState.AddModelError(nameof(model.OperadorId), "Operador inválido.");
+            ModelState.AddModelError(nameof(model.OperadorId), "Operador ou grupo inválido.");
         if (!ModelState.IsValid)
         {
             await LoadOperadores();
@@ -121,6 +121,10 @@ public class AdminController(UserManager<ApplicationUser> userManager, Applicati
     }
 
     private async Task LoadOperadores() =>
-        ViewBag.Operadores = await db.Operadores.OrderBy(o => o.Designacao)
-            .Select(o => new LookupItem(o.Id.ToString(), o.Nif + " – " + (o.Abreviatura ?? o.Designacao))).ToListAsync();
+        // Grupos e operadores na mesma lista, agrupados por tipo.
+        ViewBag.Operadores = await db.Operadores.OrderByDescending(o => o.EGrupo).ThenBy(o => o.Designacao)
+            .Select(o => new OperadorOuGrupoItem(o.Id.ToString(),
+                (o.Abreviatura ?? o.Designacao) + (o.Nif != null ? " – " + o.Nif : "")
+                    + (o.EGrupo ? " (" + o.Membros.Count + " operadores)" : o.Grupo != null ? " · grupo " + (o.Grupo.Abreviatura ?? o.Grupo.Designacao) : ""),
+                o.EGrupo ? "Grupos" : "Operadores")).ToListAsync();
 }

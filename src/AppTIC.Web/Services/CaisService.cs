@@ -12,18 +12,41 @@ public interface ICaisService
     /// e devolve os que não cabem, em vez de falhar. Null só quando os cais fixos são incompatíveis.
     /// </summary>
     PlaneamentoDia? PlanearDia(IReadOnlyList<AutocarroDto> autocarros);
+
+    /// <summary>
+    /// Planeamento do dia com categorias configuráveis (por região ou por tempo de permanência):
+    /// primeiro o maior número de autocarros com cais, depois o menor recurso a cais de reserva ou de outra
+    /// categoria e, por fim, a posição preferida de cada categoria em relação à saída.
+    /// </summary>
+    PlaneamentoDia? PlanearDia(PlaneamentoPedido pedido);
 }
 
 public class CaisService : ICaisService
 {
-    /// <summary>Cais comuns (11–17): da categoria Comum e reserva de qualquer zona lotada.</summary>
-    private static readonly int[] CaisComuns = [11, 12, 13, 14, 15, 16, 17];
+    public const int TotalCais = 17;
+
+    /// <summary>Cais do mais próximo ao mais distante da saída, segundo a planta da simulação.</summary>
+    public static readonly IReadOnlyList<int> OrdemSaidaPorOmissao = [9, 10, 8, 11, 7, 12, 13, 6, 14, 5, 15, 16, 4, 17, 3, 2, 1];
+
+    /// <summary>Zonas por região: os cais comuns (11–17) são da categoria Comum e reserva de qualquer zona lotada.</summary>
+    private static readonly IReadOnlyList<CategoriaCaisDto> CategoriasRegionais =
+    [
+        new(nameof(ZonaCais.Lisboa), [1, 2, 3, 4]),
+        new(nameof(ZonaCais.Internacional), [5, 6, 7, 8]),
+        new(nameof(ZonaCais.Norte), [9, 10]),
+        new(nameof(ZonaCais.Comum), [11, 12, 13, 14, 15, 16, 17], Reserva: true)
+    ];
+
+    private sealed record Escolha(int Indice, AutocarroPlanoDto Autocarro, int Cais, long Custo, BoolVar Escolhido)
+    {
+        public string AutocarroId => Autocarro.AutocarroId;
+    }
 
     public IReadOnlyList<AlocacaoResposta>? AlocarCais(IReadOnlyList<AutocarroDto> autocarros)
     {
-        var (model, escolhas) = Construir(autocarros, obrigatorio: true);
+        var (model, escolhas) = Construir(Regional(autocarros), obrigatorio: true);
         // Os cais comuns só se usam quando os da zona estão ocupados.
-        model.Minimize(LinearExpr.Sum(escolhas.Where(e => e.Reserva).Select(e => (ILiteral)e.Escolhido)));
+        model.Minimize(LinearExpr.WeightedSum(escolhas.Select(e => (ILiteral)e.Escolhido), escolhas.Select(e => e.Custo)));
 
         var solver = new CpSolver();
         var status = solver.Solve(model);
@@ -33,61 +56,159 @@ public class CaisService : ICaisService
             throw new InvalidOperationException($"O resolvedor não conseguiu concluir a alocação: {status}.");
 
         return escolhas.Where(e => solver.BooleanValue(e.Escolhido))
-            .Select(e => new AlocacaoResposta(e.Autocarro.AutocarroId, e.Cais))
+            .Select(e => new AlocacaoResposta(e.AutocarroId, e.Cais))
             .ToList();
     }
 
-    public PlaneamentoDia? PlanearDia(IReadOnlyList<AutocarroDto> autocarros)
+    public PlaneamentoDia? PlanearDia(IReadOnlyList<AutocarroDto> autocarros) => PlanearDia(Regional(autocarros));
+
+    public PlaneamentoDia? PlanearDia(PlaneamentoPedido pedido)
     {
-        var (model, escolhas) = Construir(autocarros, obrigatorio: false);
+        var (model, escolhas) = Construir(pedido, obrigatorio: false);
+        var literais = escolhas.Select(e => (ILiteral)e.Escolhido).ToList();
 
-        // Cada autocarro com cais vale mais do que todas as passagens para a reserva juntas.
-        long pesoAtribuido = autocarros.Count + 1;
-        model.Maximize(LinearExpr.WeightedSum(
-            escolhas.Select(e => (ILiteral)e.Escolhido),
-            escolhas.Select(e => e.Reserva ? pesoAtribuido - 1 : pesoAtribuido)));
-
+        // 1.ª fase: o maior número possível de autocarros com cais.
+        model.Maximize(LinearExpr.Sum(literais));
         var solver = new CpSolver { StringParameters = "max_time_in_seconds:10 num_workers:8" };
         var status = solver.Solve(model);
         if (status == CpSolverStatus.Infeasible)
             return null;
         if (status is not (CpSolverStatus.Optimal or CpSolverStatus.Feasible))
             throw new InvalidOperationException($"O resolvedor não conseguiu concluir o planeamento: {status}.");
+        var escolhidos = escolhas.Select(e => solver.BooleanValue(e.Escolhido)).ToList();
 
-        var alocacoes = escolhas.Where(e => solver.BooleanValue(e.Escolhido))
-            .Select(e => new AlocacaoResposta(e.Autocarro.AutocarroId, e.Cais))
+        // 2.ª fase: sem perder nenhum, o menor custo (reserva, outra categoria e posição face à saída).
+        // Parte de uma atribuição gulosa (por ordem de chegada, o cais livre mais barato), que o resolvedor melhora.
+        if (escolhas.Any(e => e.Custo > 0))
+        {
+            long Custo(IReadOnlyList<bool> solucao) => escolhas.Where((_, i) => solucao[i]).Sum(e => e.Custo);
+            var comCaisNaFase1 = escolhidos.Count(e => e);
+            var gulosa = PartidaGulosa(escolhas, escolhidos);
+            if (gulosa.Count(e => e) == comCaisNaFase1 && Custo(gulosa) <= Custo(escolhidos))
+                escolhidos = gulosa;
+
+            model.Add(LinearExpr.Sum(literais) >= comCaisNaFase1);
+            for (var i = 0; i < escolhas.Count; i++)
+                model.AddHint(escolhas[i].Escolhido, escolhidos[i] ? 1 : 0);
+            model.Minimize(LinearExpr.WeightedSum(literais, escolhas.Select(e => e.Custo)));
+
+            var segunda = new CpSolver { StringParameters = "max_time_in_seconds:6 num_workers:8" };
+            var statusCusto = segunda.Solve(model);
+            if (statusCusto is CpSolverStatus.Optimal or CpSolverStatus.Feasible)
+            {
+                var melhorada = escolhas.Select(e => segunda.BooleanValue(e.Escolhido)).ToList();
+                if (Custo(melhorada) <= Custo(escolhidos)) escolhidos = melhorada;
+            }
+            if (statusCusto != CpSolverStatus.Optimal) status = CpSolverStatus.Feasible;
+        }
+
+        var alocacoes = escolhas.Where((_, i) => escolhidos[i])
+            .Select(e => new AlocacaoResposta(e.AutocarroId, e.Cais))
             .ToList();
         var comCais = alocacoes.Select(a => a.AutocarroId).ToHashSet(StringComparer.Ordinal);
         return new PlaneamentoDia(
             alocacoes,
-            autocarros.Where(a => !comCais.Contains(a.AutocarroId)).Select(a => a.AutocarroId).ToList(),
+            pedido.Autocarros.Where(a => !comCais.Contains(a.AutocarroId)).Select(a => a.AutocarroId).ToList(),
             status == CpSolverStatus.Optimal);
     }
 
-    private static (CpModel Model, List<(AutocarroDto Autocarro, int Cais, bool Reserva, BoolVar Escolhido)> Escolhas)
-        Construir(IReadOnlyList<AutocarroDto> autocarros, bool obrigatorio)
+    /// <summary>
+    /// Solução inicial da 2.ª fase: os autocarros com cais na 1.ª fase, por ordem de chegada, ficam com o cais livre
+    /// de menor custo; os de cais fixo mantêm-no. Pode deixar algum por atribuir quando as categorias são restritas.
+    /// </summary>
+    private static List<bool> PartidaGulosa(List<Escolha> escolhas, IReadOnlyList<bool> escolhidos)
+    {
+        var ocupacao = Enumerable.Range(0, TotalCais + 1).Select(_ => new List<AutocarroPlanoDto>()).ToArray();
+        var resultado = new bool[escolhas.Count];
+        bool Livre(Escolha e) => ocupacao[e.Cais].All(o =>
+            o.PartidaMinutos <= e.Autocarro.ChegadaMinutos || e.Autocarro.PartidaMinutos <= o.ChegadaMinutos);
+        void Ocupar(int i)
+        {
+            resultado[i] = true;
+            ocupacao[escolhas[i].Cais].Add(escolhas[i].Autocarro);
+        }
+
+        var porAutocarro = Enumerable.Range(0, escolhas.Count).GroupBy(i => escolhas[i].Indice)
+            .Where(g => g.Any(i => escolhidos[i]))
+            .OrderBy(g => escolhas[g.First()].Autocarro.ChegadaMinutos).ThenBy(g => escolhas[g.First()].Autocarro.PartidaMinutos)
+            .ToList();
+        foreach (var grupo in porAutocarro.Where(g => escolhas[g.First()].Autocarro.CaisFixo is not null))
+            Ocupar(grupo.First(i => escolhidos[i]));
+        foreach (var grupo in porAutocarro.Where(g => escolhas[g.First()].Autocarro.CaisFixo is null))
+        {
+            var livres = grupo.Where(i => Livre(escolhas[i])).ToList();
+            if (livres.Count > 0) Ocupar(livres.MinBy(i => escolhas[i].Custo));
+        }
+        return [.. resultado];
+    }
+
+    /// <summary>Erro de validação do pedido, ou null se for válido.</summary>
+    public static string? Validar(PlaneamentoPedido pedido)
+    {
+        if (pedido.Categorias is null || pedido.Autocarros is null)
+            return "Indique as categorias e os autocarros a planear.";
+        if (pedido.Categorias.Any(c => string.IsNullOrWhiteSpace(c.Id) || c.Cais is null || !Enum.IsDefined(c.Preferencia) ||
+                c.Cais.Any(n => n < 1 || n > TotalCais)) ||
+            pedido.Categorias.Select(c => c.Id).Distinct(StringComparer.Ordinal).Count() != pedido.Categorias.Count)
+            return $"Existem categorias inválidas ou repetidas (os cais vão de 1 a {TotalCais}).";
+        if (pedido.OrdemSaida is { } ordem && !ordem.Order().SequenceEqual(Enumerable.Range(1, TotalCais)))
+            return $"A ordem de saída tem de conter cada cais de 1 a {TotalCais} uma única vez.";
+
+        var categorias = pedido.Categorias.Select(c => c.Id).ToHashSet(StringComparer.Ordinal);
+        if (pedido.Autocarros.Any(a => string.IsNullOrWhiteSpace(a.AutocarroId) || a.Categoria is null ||
+                !categorias.Contains(a.Categoria) || a.ChegadaMinutos >= a.PartidaMinutos) ||
+            pedido.Autocarros.Select(a => a.AutocarroId).Distinct(StringComparer.Ordinal).Count() != pedido.Autocarros.Count)
+            return "Existem pedidos inválidos ou repetidos no planeamento do dia.";
+        return null;
+    }
+
+    private static PlaneamentoPedido Regional(IReadOnlyList<AutocarroDto> autocarros)
+    {
+        if (autocarros.Any(a => !Enum.IsDefined(a.Zona)))
+            throw new ArgumentOutOfRangeException(nameof(autocarros), "Zona de cais inválida.");
+        return new PlaneamentoPedido(
+            CategoriasRegionais,
+            autocarros.Select(a => new AutocarroPlanoDto(a.AutocarroId, a.Zona.ToString(), a.ChegadaMinutos, a.PartidaMinutos, a.CaisFixo)).ToList());
+    }
+
+    /// <summary>
+    /// Custo de cada opção: o nível (0 cais da categoria, 1 reserva, 2 outra categoria em último recurso) e, dentro
+    /// do nível, a distância à posição preferida (junto à saída ou no fundo).
+    /// </summary>
+    private static (CpModel Model, List<Escolha> Escolhas) Construir(PlaneamentoPedido pedido, bool obrigatorio)
     {
         var model = new CpModel();
-        var intervalos = Enumerable.Range(1, 17).ToDictionary(c => c, _ => new List<IntervalVar>());
-        var escolhas = new List<(AutocarroDto Autocarro, int Cais, bool Reserva, BoolVar Escolhido)>();
+        var intervalos = Enumerable.Range(1, TotalCais).ToDictionary(c => c, _ => new List<IntervalVar>());
+        var escolhas = new List<Escolha>();
 
-        foreach (var autocarro in autocarros)
+        var categorias = pedido.Categorias.ToDictionary(c => c.Id, StringComparer.Ordinal);
+        var caisReserva = pedido.Categorias.Where(c => c.Reserva).SelectMany(c => c.Cais).ToHashSet();
+        var posicaoSaida = (pedido.OrdemSaida ?? OrdemSaidaPorOmissao)
+            .Select((cais, posicao) => (cais, posicao)).ToDictionary(p => p.cais, p => (long)p.posicao);
+
+        // Subir um nível pesa sempre mais do que qualquer diferença de posição dentro do nível.
+        long pesoNivel = pedido.Categorias.Any(c => c.Preferencia != PreferenciaCais.Nenhuma) ? TotalCais + 3 : 1;
+
+        for (var indice = 0; indice < pedido.Autocarros.Count; indice++)
         {
-            var caisPrimarios = autocarro.Zona switch
-            {
-                ZonaCais.Lisboa => Enumerable.Range(1, 4),
-                ZonaCais.Internacional => Enumerable.Range(5, 4),
-                ZonaCais.Norte => Enumerable.Range(9, 2),
-                ZonaCais.Comum => CaisComuns,
-                _ => throw new ArgumentOutOfRangeException(nameof(autocarros), "Zona de cais inválida.")
-            };
-
-            // Uma zona lotada pode usar os cais comuns; nunca os cais de outra zona.
-            var caisDisponiveis = caisPrimarios.Concat(CaisComuns).Distinct();
+            var autocarro = pedido.Autocarros[indice];
+            if (!categorias.TryGetValue(autocarro.Categoria, out var categoria))
+                throw new ArgumentException($"Categoria de cais desconhecida: {autocarro.Categoria}.", nameof(pedido));
+            var caisPrimarios = categoria.Cais.ToHashSet();
 
             var opcoes = new List<BoolVar>();
-            foreach (var cais in caisDisponiveis)
+            for (var cais = 1; cais <= TotalCais; cais++)
             {
+                // Uma categoria lotada pode usar os cais de reserva; os de outra categoria só em último recurso.
+                var nivel = caisPrimarios.Contains(cais) ? 0 : caisReserva.Contains(cais) ? 1 : pedido.UltimoRecurso ? 2 : -1;
+                if (nivel < 0) continue;
+                var preferencia = categoria.Preferencia switch
+                {
+                    PreferenciaCais.Saida => posicaoSaida[cais],
+                    PreferenciaCais.Fundo => TotalCais - 1 - posicaoSaida[cais],
+                    _ => 0
+                };
+
                 var escolhido = model.NewBoolVar($"autocarro_{escolhas.Count}_cais_{cais}");
                 var intervalo = model.NewOptionalFixedSizeIntervalVar(
                     autocarro.ChegadaMinutos,
@@ -96,14 +217,20 @@ public class CaisService : ICaisService
                     $"intervalo_{escolhas.Count}");
                 opcoes.Add(escolhido);
                 intervalos[cais].Add(intervalo);
-                escolhas.Add((autocarro, cais, !caisPrimarios.Contains(cais), escolhido));
+                escolhas.Add(new Escolha(indice, autocarro, cais, nivel * pesoNivel + preferencia, escolhido));
                 if (autocarro.CaisFixo is { } fixo && cais != fixo)
                     model.Add(escolhido == 0);
             }
+
             // Um autocarro com cais fixo (já atracado) tem sempre de ficar com ele.
             if (obrigatorio || autocarro.CaisFixo is not null)
-                model.AddExactlyOne(opcoes);
-            else
+            {
+                if (opcoes.Count == 0)
+                    model.Add(model.NewConstant(0) == 1); // sem cais possíveis: inviável
+                else
+                    model.AddExactlyOne(opcoes);
+            }
+            else if (opcoes.Count > 1)
                 model.AddAtMostOne(opcoes);
         }
 

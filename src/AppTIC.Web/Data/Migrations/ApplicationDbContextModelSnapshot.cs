@@ -173,6 +173,10 @@ namespace AppTIC.Web.Data.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("declaracao_capacidade");
 
+                    b.Property<int?>("DeclaracaoId")
+                        .HasColumnType("integer")
+                        .HasColumnName("declaracao_id");
+
                     b.Property<string>("DesignacaoLinha")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)")
@@ -235,11 +239,17 @@ namespace AppTIC.Web.Data.Migrations
                     b.HasKey("Id")
                         .HasName("pk_circulacoes");
 
+                    b.HasIndex("DeclaracaoId")
+                        .HasDatabaseName("ix_circulacoes_declaracao_id");
+
                     b.HasIndex("DestinoId")
                         .HasDatabaseName("ix_circulacoes_destino_id");
 
                     b.HasIndex("GtfsFeedId")
                         .HasDatabaseName("ix_circulacoes_gtfs_feed_id");
+
+                    b.HasIndex("IdTic")
+                        .HasDatabaseName("ix_circulacoes_id_tic");
 
                     b.HasIndex("ImportacaoId")
                         .HasDatabaseName("ix_circulacoes_importacao_id");
@@ -325,6 +335,124 @@ namespace AppTIC.Web.Data.Migrations
                         {
                             t.HasCheckConstraint("ck_circulacao_horarios_tic_periodo", "data_fim >= data_inicio");
                         });
+                });
+
+            modelBuilder.Entity("AppTIC.Web.Models.Domain.Declaracao", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("Ano")
+                        .HasColumnType("integer")
+                        .HasColumnName("ano");
+
+                    b.Property<int?>("AnteriorId")
+                        .HasColumnType("integer")
+                        .HasColumnName("anterior_id");
+
+                    b.Property<DateTime>("AtualizadoEm")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("atualizado_em");
+
+                    b.Property<DateTime>("CriadoEm")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("criado_em");
+
+                    b.Property<int>("Numero")
+                        .HasColumnType("integer")
+                        .HasColumnName("numero");
+
+                    b.Property<int?>("OperadorId")
+                        .HasColumnType("integer")
+                        .HasColumnName("operador_id");
+
+                    b.Property<int>("Versao")
+                        .HasColumnType("integer")
+                        .HasColumnName("versao");
+
+                    b.HasKey("Id")
+                        .HasName("pk_declaracoes");
+
+                    b.HasIndex("AnteriorId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_declaracoes_anterior_id");
+
+                    b.HasIndex("OperadorId")
+                        .HasDatabaseName("ix_declaracoes_operador_id");
+
+                    b.HasIndex("Ano", "Numero")
+                        .IsUnique()
+                        .HasDatabaseName("ix_declaracoes_ano_numero");
+
+                    b.ToTable("declaracoes", (string)null);
+                });
+
+            modelBuilder.Entity("AppTIC.Web.Models.Domain.DeclaracaoCirculacao", b =>
+                {
+                    b.Property<int>("DeclaracaoId")
+                        .HasColumnType("integer")
+                        .HasColumnName("declaracao_id");
+
+                    b.Property<int>("CirculacaoId")
+                        .HasColumnType("integer")
+                        .HasColumnName("circulacao_id");
+
+                    b.HasKey("DeclaracaoId", "CirculacaoId")
+                        .HasName("pk_declaracao_circulacoes");
+
+                    b.HasIndex("CirculacaoId")
+                        .HasDatabaseName("ix_declaracao_circulacoes_circulacao_id");
+
+                    b.ToTable("declaracao_circulacoes", (string)null);
+                });
+
+            modelBuilder.Entity("AppTIC.Web.Models.Domain.DeclaracaoVersao", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("CirculacaoId")
+                        .HasColumnType("integer")
+                        .HasColumnName("circulacao_id");
+
+                    b.Property<DateTime>("Data")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("data");
+
+                    b.Property<int>("DeclaracaoId")
+                        .HasColumnType("integer")
+                        .HasColumnName("declaracao_id");
+
+                    b.Property<string>("Motivo")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("motivo");
+
+                    b.Property<string>("Utilizador")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("utilizador");
+
+                    b.Property<int>("Versao")
+                        .HasColumnType("integer")
+                        .HasColumnName("versao");
+
+                    b.HasKey("Id")
+                        .HasName("pk_declaracao_versoes");
+
+                    b.HasIndex("DeclaracaoId", "Versao")
+                        .HasDatabaseName("ix_declaracao_versoes_declaracao_id_versao");
+
+                    b.ToTable("declaracao_versoes", (string)null);
                 });
 
             modelBuilder.Entity("AppTIC.Web.Models.Domain.GtfsFeed", b =>
@@ -621,6 +749,11 @@ namespace AppTIC.Web.Data.Migrations
                         .HasColumnType("text")
                         .HasColumnName("comentarios");
 
+                    b.Property<string>("Cor")
+                        .HasMaxLength(9)
+                        .HasColumnType("character varying(9)")
+                        .HasColumnName("cor");
+
                     b.Property<DateTime>("CriadoEm")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("criado_em");
@@ -631,13 +764,20 @@ namespace AppTIC.Web.Data.Migrations
                         .HasColumnType("character varying(200)")
                         .HasColumnName("designacao");
 
+                    b.Property<bool>("EGrupo")
+                        .HasColumnType("boolean")
+                        .HasColumnName("e_grupo");
+
+                    b.Property<int?>("GrupoId")
+                        .HasColumnType("integer")
+                        .HasColumnName("grupo_id");
+
                     b.Property<string>("GtfsParagensTic")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)")
                         .HasColumnName("gtfs_paragens_tic");
 
                     b.Property<string>("Nif")
-                        .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
                         .HasColumnName("nif");
@@ -647,8 +787,15 @@ namespace AppTIC.Web.Data.Migrations
                         .HasColumnType("text")
                         .HasColumnName("owner_id");
 
+                    b.Property<int?>("PrefixoIdTic")
+                        .HasColumnType("integer")
+                        .HasColumnName("prefixo_id_tic");
+
                     b.HasKey("Id")
                         .HasName("pk_operadores");
+
+                    b.HasIndex("GrupoId")
+                        .HasDatabaseName("ix_operadores_grupo_id");
 
                     b.HasIndex("OwnerId", "Nif")
                         .IsUnique()
@@ -724,7 +871,11 @@ namespace AppTIC.Web.Data.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("CirculacaoId")
+                    b.Property<bool>("Aplicado")
+                        .HasColumnType("boolean")
+                        .HasColumnName("aplicado");
+
+                    b.Property<int?>("CirculacaoId")
                         .HasColumnType("integer")
                         .HasColumnName("circulacao_id");
 
@@ -745,11 +896,30 @@ namespace AppTIC.Web.Data.Migrations
                         .HasColumnType("text")
                         .HasColumnName("descricao");
 
+                    b.Property<string>("DesignacaoLinha")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("designacao_linha");
+
+                    b.Property<int?>("DestinoId")
+                        .HasColumnType("integer")
+                        .HasColumnName("destino_id");
+
+                    b.Property<string>("DiasSemana")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("dias_semana");
+
                     b.Property<string>("Estado")
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
                         .HasColumnName("estado");
+
+                    b.Property<string>("LinhaId")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("linha_id");
 
                     b.Property<TimeOnly?>("NovaChegada")
                         .HasColumnType("time without time zone")
@@ -758,6 +928,14 @@ namespace AppTIC.Web.Data.Migrations
                     b.Property<TimeOnly?>("NovaPartida")
                         .HasColumnType("time without time zone")
                         .HasColumnName("nova_partida");
+
+                    b.Property<int>("OperadorId")
+                        .HasColumnType("integer")
+                        .HasColumnName("operador_id");
+
+                    b.Property<int?>("OrigemId")
+                        .HasColumnType("integer")
+                        .HasColumnName("origem_id");
 
                     b.Property<string>("PedidoPorId")
                         .IsRequired()
@@ -777,11 +955,31 @@ namespace AppTIC.Web.Data.Migrations
                         .HasColumnType("text")
                         .HasColumnName("resposta");
 
+                    b.Property<string>("Tipo")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("tipo");
+
+                    b.Property<string>("ViagemId")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("viagem_id");
+
                     b.HasKey("Id")
                         .HasName("pk_pedidos_alteracao");
 
                     b.HasIndex("CirculacaoId")
                         .HasDatabaseName("ix_pedidos_alteracao_circulacao_id");
+
+                    b.HasIndex("DestinoId")
+                        .HasDatabaseName("ix_pedidos_alteracao_destino_id");
+
+                    b.HasIndex("OperadorId")
+                        .HasDatabaseName("ix_pedidos_alteracao_operador_id");
+
+                    b.HasIndex("OrigemId")
+                        .HasDatabaseName("ix_pedidos_alteracao_origem_id");
 
                     b.HasIndex("PedidoPorId")
                         .HasDatabaseName("ix_pedidos_alteracao_pedido_por_id");
@@ -790,6 +988,22 @@ namespace AppTIC.Web.Data.Migrations
                         .HasDatabaseName("ix_pedidos_alteracao_estado_criado_em");
 
                     b.ToTable("pedidos_alteracao", (string)null);
+                });
+
+            modelBuilder.Entity("AppTIC.Web.Models.Domain.PedidoDia", b =>
+                {
+                    b.Property<int>("PedidoId")
+                        .HasColumnType("integer")
+                        .HasColumnName("pedido_id");
+
+                    b.Property<DateOnly>("Data")
+                        .HasColumnType("date")
+                        .HasColumnName("data");
+
+                    b.HasKey("PedidoId", "Data")
+                        .HasName("pk_pedido_dias");
+
+                    b.ToTable("pedido_dias", (string)null);
                 });
 
             modelBuilder.Entity("AppTIC.Web.Models.Domain.PercursoParagem", b =>
@@ -1059,6 +1273,12 @@ namespace AppTIC.Web.Data.Migrations
 
             modelBuilder.Entity("AppTIC.Web.Models.Domain.Circulacao", b =>
                 {
+                    b.HasOne("AppTIC.Web.Models.Domain.Declaracao", "Declaracao")
+                        .WithMany("Circulacoes")
+                        .HasForeignKey("DeclaracaoId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_circulacoes_declaracoes_declaracao_id");
+
                     b.HasOne("AppTIC.Web.Models.Domain.Paragem", "Destino")
                         .WithMany()
                         .HasForeignKey("DestinoId")
@@ -1097,6 +1317,8 @@ namespace AppTIC.Web.Data.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_circulacoes_users_owner_id");
 
+                    b.Navigation("Declaracao");
+
                     b.Navigation("Destino");
 
                     b.Navigation("GtfsFeed");
@@ -1132,6 +1354,58 @@ namespace AppTIC.Web.Data.Migrations
                         .HasConstraintName("fk_circulacao_horarios_tic_circulacoes_circulacao_id");
 
                     b.Navigation("Circulacao");
+                });
+
+            modelBuilder.Entity("AppTIC.Web.Models.Domain.Declaracao", b =>
+                {
+                    b.HasOne("AppTIC.Web.Models.Domain.Declaracao", "Anterior")
+                        .WithOne("Renovacao")
+                        .HasForeignKey("AppTIC.Web.Models.Domain.Declaracao", "AnteriorId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_declaracoes_declaracoes_anterior_id");
+
+                    b.HasOne("AppTIC.Web.Models.Domain.Operador", "Operador")
+                        .WithMany()
+                        .HasForeignKey("OperadorId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_declaracoes_operadores_operador_id");
+
+                    b.Navigation("Anterior");
+
+                    b.Navigation("Operador");
+                });
+
+            modelBuilder.Entity("AppTIC.Web.Models.Domain.DeclaracaoCirculacao", b =>
+                {
+                    b.HasOne("AppTIC.Web.Models.Domain.Circulacao", "Circulacao")
+                        .WithMany()
+                        .HasForeignKey("CirculacaoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_declaracao_circulacoes_circulacoes_circulacao_id");
+
+                    b.HasOne("AppTIC.Web.Models.Domain.Declaracao", "Declaracao")
+                        .WithMany("Historico")
+                        .HasForeignKey("DeclaracaoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_declaracao_circulacoes_declaracoes_declaracao_id");
+
+                    b.Navigation("Circulacao");
+
+                    b.Navigation("Declaracao");
+                });
+
+            modelBuilder.Entity("AppTIC.Web.Models.Domain.DeclaracaoVersao", b =>
+                {
+                    b.HasOne("AppTIC.Web.Models.Domain.Declaracao", "Declaracao")
+                        .WithMany("Versoes")
+                        .HasForeignKey("DeclaracaoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_declaracao_versoes_declaracoes_declaracao_id");
+
+                    b.Navigation("Declaracao");
                 });
 
             modelBuilder.Entity("AppTIC.Web.Models.Domain.GtfsFeed", b =>
@@ -1176,12 +1450,20 @@ namespace AppTIC.Web.Data.Migrations
 
             modelBuilder.Entity("AppTIC.Web.Models.Domain.Operador", b =>
                 {
+                    b.HasOne("AppTIC.Web.Models.Domain.Operador", "Grupo")
+                        .WithMany("Membros")
+                        .HasForeignKey("GrupoId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_operadores_operadores_grupo_id");
+
                     b.HasOne("AppTIC.Web.Models.Domain.ApplicationUser", "Owner")
                         .WithMany()
                         .HasForeignKey("OwnerId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_operadores_asp_net_users_owner_id");
+
+                    b.Navigation("Grupo");
 
                     b.Navigation("Owner");
                 });
@@ -1204,8 +1486,26 @@ namespace AppTIC.Web.Data.Migrations
                         .WithMany()
                         .HasForeignKey("CirculacaoId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
                         .HasConstraintName("fk_pedidos_alteracao_circulacoes_circulacao_id");
+
+                    b.HasOne("AppTIC.Web.Models.Domain.Paragem", "Destino")
+                        .WithMany()
+                        .HasForeignKey("DestinoId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_pedidos_alteracao_paragens_destino_id");
+
+                    b.HasOne("AppTIC.Web.Models.Domain.Operador", "Operador")
+                        .WithMany()
+                        .HasForeignKey("OperadorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_pedidos_alteracao_operadores_operador_id");
+
+                    b.HasOne("AppTIC.Web.Models.Domain.Paragem", "Origem")
+                        .WithMany()
+                        .HasForeignKey("OrigemId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_pedidos_alteracao_paragens_origem_id");
 
                     b.HasOne("AppTIC.Web.Models.Domain.ApplicationUser", "PedidoPor")
                         .WithMany()
@@ -1216,7 +1516,25 @@ namespace AppTIC.Web.Data.Migrations
 
                     b.Navigation("Circulacao");
 
+                    b.Navigation("Destino");
+
+                    b.Navigation("Operador");
+
+                    b.Navigation("Origem");
+
                     b.Navigation("PedidoPor");
+                });
+
+            modelBuilder.Entity("AppTIC.Web.Models.Domain.PedidoDia", b =>
+                {
+                    b.HasOne("AppTIC.Web.Models.Domain.PedidoAlteracao", "Pedido")
+                        .WithMany("Dias")
+                        .HasForeignKey("PedidoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_pedido_dias_pedidos_alteracao_pedido_id");
+
+                    b.Navigation("Pedido");
                 });
 
             modelBuilder.Entity("AppTIC.Web.Models.Domain.PercursoParagem", b =>
@@ -1326,6 +1644,17 @@ namespace AppTIC.Web.Data.Migrations
                     b.Navigation("Percurso");
                 });
 
+            modelBuilder.Entity("AppTIC.Web.Models.Domain.Declaracao", b =>
+                {
+                    b.Navigation("Circulacoes");
+
+                    b.Navigation("Historico");
+
+                    b.Navigation("Renovacao");
+
+                    b.Navigation("Versoes");
+                });
+
             modelBuilder.Entity("AppTIC.Web.Models.Domain.GtfsFeed", b =>
                 {
                     b.Navigation("Registos");
@@ -1341,6 +1670,13 @@ namespace AppTIC.Web.Data.Migrations
                     b.Navigation("Circulacoes");
 
                     b.Navigation("GtfsFeeds");
+
+                    b.Navigation("Membros");
+                });
+
+            modelBuilder.Entity("AppTIC.Web.Models.Domain.PedidoAlteracao", b =>
+                {
+                    b.Navigation("Dias");
                 });
 #pragma warning restore 612, 618
         }

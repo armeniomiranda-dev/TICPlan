@@ -1,0 +1,15 @@
+@* Cor de um operador/grupo nas legendas e gráficos: ColorPicker da Syncfusion + "sem cor própria". Publica Cor e SemCor. *@
+@model CorPickerModel
+<label class="form-label" for="Cor">Cor nas legendas e gráficos</label>
+<div class="d-flex align-items-center gap-3">
+    <ejs-colorpicker id="Cor" name="Cor" value="@(Model.Cor ?? Model.CorEfetiva)" mode="Palette" modeSwitcher="true" showButtons="false"
+                     change="corEscolhida"></ejs-colorpicker>
+    <div class="form-check m-0">
+        <input class="form-check-input" type="checkbox" name="SemCor" value="true" id="SemCor" checked="@(Model.Cor is null)" />
+        <label class="form-check-label small" for="SemCor">@Model.SemCorTexto</label>
+    </div>
+</div>
+<script>
+    // Escolher uma cor tira o "sem cor própria".
+    function corEscolhida() { document.getElementById('SemCor').checked = false; }
+</script>
