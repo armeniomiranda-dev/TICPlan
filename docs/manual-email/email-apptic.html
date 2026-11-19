@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<title>AppTIC – Guia rápido das funcionalidades</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f5f7;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f7;">
+<tr><td align="center" style="padding:24px 12px;">
+<table role="presentation" width="720" cellpadding="0" cellspacing="0" style="max-width:720px;width:100%;background:#ffffff;border:1px solid #e3e6ea;font-family:Segoe UI,Calibri,Arial,sans-serif;font-size:15px;line-height:1.5;color:#212529;">
+
+<!-- Cabeçalho -->
+<tr><td style="background:#0d6efd;color:#ffffff;padding:22px 28px;">
+  <div style="font-size:22px;font-weight:600;">AppTIC · Planeamento de circulações no TIC</div>
+  <div style="font-size:14px;opacity:.9;">Guia rápido das funcionalidades disponíveis</div>
+</td></tr>
+
+<tr><td style="padding:24px 28px 8px;">
+<p>Bom dia,</p>
+<p>Partilho um resumo das funcionalidades da <b>AppTIC</b>, com imagens de cada ecrã. A aplicação está disponível em
+<a href="https://ticplanner.mobtporto.pt/" style="color:#0d6efd;">https://ticplanner.mobtporto.pt/</a>.</p>
+<p>Há dois perfis de acesso:</p>
+<ul style="margin-top:0;">
+  <li><b>Administrador (gestão do TIC)</b>: vê e edita toda a informação, gere operadores, declarações, numeração, importações e utilizadores, e responde aos pedidos.</li>
+  <li><b>Utilizador de operador</b>: vê apenas as circulações, paragens e feeds GTFS do seu operador (ou do seu grupo) e submete <b>pedidos</b> de nova circulação, alteração ou remoção.</li>
+</ul>
+
+<p style="margin-bottom:4px;"><b>Índice</b></p>
+<ol style="margin-top:0;">
+  <li>Página inicial e ocupação do terminal</li>
+  <li>Operadores e grupos de operadores</li>
+  <li>Declarações (DCP)</li>
+  <li>Numeração do ID TIC</li>
+  <li>Circulações</li>
+  <li>Pedidos</li>
+  <li>Calendário</li>
+  <li>Simulação do terminal</li>
+  <li>Exportação do planeamento</li>
+  <li>Feeds GTFS</li>
+  <li>Importações (Excel e GTFS)</li>
+  <li>Utilizadores e registos</li>
+  <li>O que vê um operador</li>
+</ol>
+</td></tr>
+
+<!-- 1 -->
+<tr><td style="padding:8px 28px;">
+<h2 style="font-size:18px;color:#0d6efd;border-bottom:2px solid #e7f0ff;padding-bottom:4px;">1. Página inicial e ocupação do terminal</h2>
+<p>Indicadores-resumo (operadores, paragens, circulações, pedidos pendentes, circulações do dia, feeds GTFS) e o gráfico de
+<b>ocupação do terminal por intervalos de 15 minutos</b> para o dia escolhido, com o pico, o total de chegadas e partidas e a
+repartição por tipo de viagem no TIC (início, fim ou passagem) por dia, mês e ano, e os destinos mais frequentes.</p>
+<img src="img/01-inicio.png" width="664" alt="Página inicial com indicadores e gráfico de ocupação" style="width:100%;max-width:664px;border:1px solid #dee2e6;display:block;">
+</td></tr>
+
+<!-- 2 -->
+<tr><td style="padding:8px 28px;">
+<h2 style="font-size:18px;color:#0d6efd;border-bottom:2px solid #e7f0ff;padding-bottom:4px;">2. Operadores e grupos de operadores</h2>
+<p>Ficha de cada operador: NIF, alvará e validade, âmbito (nacional/internacional), cor de identificação e paragens do TIC no seu GTFS.</p>
+<img src="img/02-operadores.png" width="664" alt="Lista de operadores" style="width:100%;max-width:664px;border:1px solid #dee2e6;display:block;">
+<p>Os <b>grupos</b> (ex.: Rede Expressos) juntam vários operadores. Os utilizadores do grupo veem e fazem pedidos para todos os
+operadores do grupo, e nos operadores do grupo vale o prefixo de ID TIC do grupo. Um operador existente pode passar a grupo.</p>
+<img src="img/03-grupos.png" width="664" alt="Grupos de operadores" style="width:100%;max-width:664px;border:1px solid #dee2e6;display:block;">
+</td></tr>
+
+<!-- 3 -->
+<tr><td style="padding:8px 28px;">
+<h2 style="font-size:18px;color:#0d6efd;border-bottom:2px solid #e7f0ff;padding-bottom:4px;">3. Declarações (DCP)</h2>
+<p>As declarações seguem o formato <b>Ano.Número.Versão</b> (ex.: <code>2027.62.01</code>) e são anuais:</p>
+<ul style="margin-top:0;">
+  <li>cada <b>nova circulação</b> recebe uma nova declaração (número seguinte no ano, versão 00);</li>
+  <li>a <b>versão</b> sobe automaticamente quando muda o horário de uma circulação da declaração (ou manualmente, com motivo);</li>
+  <li>a <b>renovação</b> passa todas as declarações para o ano seguinte, com numeração nova ou mantendo os números.</li>
+</ul>
+<p>Ao criar uma declaração escolhe-se o operador declarante e as circulações numa lista já filtrada por esse operador.
+A lista pode ser vista por declaração ou por circulação e exportada para Excel.</p>
+<img src="img/04-declaracoes.png" width="664" alt="Lista de declarações DCP" style="width:100%;max-width:664px;border:1px solid #dee2e6;display:block;">
+<p>No detalhe vê-se o histórico de versões e é possível associar ou retirar circulações, criar uma nova versão e mudar o declarante.</p>
+<img src="img/05-declaracao-detalhe.png" width="664" alt="Detalhe de uma declaração" style="width:100%;max-width:664px;border:1px solid #dee2e6;display:block;">
+</td></tr>
+
+<!-- 4 -->
+<tr><td style="padding:8px 28px;">
+<h2 style="font-size:18px;color:#0d6efd;border-bottom:2px solid #e7f0ff;padding-bottom:4px;">4. Numeração do ID TIC</h2>
+<p>O <b>ID TIC</b> é o prefixo do operador seguido de 3 dígitos sequenciais (prefixo 8 → 8001…8999). Esta página mostra, por
+prefixo, o intervalo, os números utilizados, o próximo número e os livres. Lista também os operadores sem prefixo e os ID TIC
+a rever (duplicados ou fora do intervalo). As novas circulações recebem automaticamente o número seguinte.</p>
+<img src="img/06-numeracao-idtic.png" width="664" alt="Numeração do ID TIC" style="width:100%;max-width:664px;border:1px solid #dee2e6;display:block;">
+</td></tr>
+
+<!-- 5 -->
+<tr><td style="padding:8px 28px;">
+<h2 style="font-size:18px;color:#0d6efd;border-bottom:2px solid #e7f0ff;padding-bottom:4px;">5. Circulações</h2>
+<p>Grelha com todas as circulações, com pesquisa, filtros por coluna e filtro por operador ou lote de importação.</p>
+<img src="img/07-circulacoes.png" width="664" alt="Lista de circulações" style="width:100%;max-width:664px;border:1px solid #dee2e6;display:block;">
+<p>Na ficha de cada circulação:</p>
+<ul style="margin-top:0;">
+  <li><b>Horas no TIC por período</b>: define-se a chegada e a partida para um intervalo de datas, guardando o histórico;</li>
+  <li><b>Calendário</b>: marcar ou desmarcar dias (por período e dia da semana, ou dia a dia);</li>
+  <li><b>Percurso a partir do TIC</b>: sequência ordenada de paragens;</li>
+  <li>ID TIC, declaração (DCP) associada e pedidos relacionados.</li>
+</ul>
+<img src="img/08-circulacao-detalhe.png" width="664" alt="Ficha de uma circulação" style="width:100%;max-width:664px;border:1px solid #dee2e6;display:block;">
+</td></tr>
+
+<!-- 6 -->
+<tr><td style="padding:8px 28px;">
+<h2 style="font-size:18px;color:#0d6efd;border-bottom:2px solid #e7f0ff;padding-bottom:4px;">6. Pedidos</h2>
+<p>Os operadores não editam diretamente: submetem <b>pedidos</b> de três tipos: <b>nova circulação</b>, <b>alteração</b>
+(horas e/ou calendário a partir de uma data) ou <b>remoção</b>. No pedido de nova circulação indica-se a linha, origem/destino, horas no TIC
+e os dias num calendário anual.</p>
+<img src="img/22-utilizador-pedido-novo.png" width="664" alt="Formulário de pedido de nova circulação" style="width:100%;max-width:664px;border:1px solid #dee2e6;display:block;">
+<p>A gestão do TIC vê a lista de pedidos, analisa cada um e <b>aceita</b> (aplicando a alteração; numa nova circulação é atribuído
+o ID TIC e criada a DCP) ou <b>rejeita</b>, com resposta ao operador.</p>
+<img src="img/15-pedidos.png" width="664" alt="Lista de pedidos" style="width:100%;max-width:664px;border:1px solid #dee2e6;display:block;">
+<img src="img/16-pedido-detalhe.png" width="664" alt="Detalhe de um pedido" style="width:100%;max-width:664px;border:1px solid #dee2e6;display:block;margin-top:10px;">
+</td></tr>
+
+<!-- 7 -->
+<tr><td style="padding:8px 28px;">
+<h2 style="font-size:18px;color:#0d6efd;border-bottom:2px solid #e7f0ff;padding-bottom:4px;">7. Calendário</h2>
+<p>Calendário de chegadas e partidas no TIC (vista de mês, semana, dia ou lista), com as circulações coloridas pela cor do operador, filtro por operador
+e por chegadas/partidas. Clicar num evento abre a circulação.</p>
+<img src="img/09-calendario.png" width="664" alt="Calendário de chegadas e partidas" style="width:100%;max-width:664px;border:1px solid #dee2e6;display:block;">
+</td></tr>
+
+<!-- 8 -->
+<tr><td style="padding:8px 28px;">
+<h2 style="font-size:18px;color:#0d6efd;border-bottom:2px solid #e7f0ff;padding-bottom:4px;">8. Simulação do terminal</h2>
+<p>Simula um dia de operação na planta esquemática do terminal (17 cais), a partir dos horários registados:</p>
+<ul style="margin-top:0;">
+  <li>cais agrupados por <b>categoria</b> (Lisboa, Internacional, Norte de Portugal, Comum), com cais de reserva quando a categoria está cheia;</li>
+  <li>zonamento <b>por região</b> ou <b>por tempo de permanência</b>;</li>
+  <li><b>Planear dia</b>: o algoritmo de otimização atribui cais ao maior número possível de autocarros;</li>
+  <li>reprodução com velocidade ajustável (até 1 min/s), painel de cais, despacho de carros fora do plano e registo de eventos.</li>
+</ul>
+<p>A simulação é isolada: não altera a operação nem a base de dados.</p>
+<img src="img/10-simulacao.png" width="664" alt="Simulação do terminal" style="width:100%;max-width:664px;border:1px solid #dee2e6;display:block;">
+</td></tr>
+
+<!-- 9 -->
+<tr><td style="padding:8px 28px;">
+<h2 style="font-size:18px;color:#0d6efd;border-bottom:2px solid #e7f0ff;padding-bottom:4px;">9. Exportação do planeamento</h2>
+<p>Gera o ficheiro <code>Horarios.csv</code> (separador <code>;</code>, ISO-8859-1) para um dia, semana ou período, para todos
+os operadores ou para um operador/grupo, com uma linha por circulação e dia. Opcionalmente <b>calcula os cais</b> (até 7 dias).
+O botão <b>Pré-visualizar</b> mostra as primeiras 100 linhas antes de exportar.</p>
+<img src="img/11b-exportacao-previsualizar.png" width="664" alt="Exportação com pré-visualização" style="width:100%;max-width:664px;border:1px solid #dee2e6;display:block;">
+</td></tr>
+
+<!-- 10 -->
+<tr><td style="padding:8px 28px;">
+<h2 style="font-size:18px;color:#0d6efd;border-bottom:2px solid #e7f0ff;padding-bottom:4px;">10. Feeds GTFS</h2>
+<p>Cada operador carrega o seu feed GTFS (.zip). A aplicação valida-o (ficheiros obrigatórios, cabeçalhos, datas), avisa se
+for repetido e gera um <b>GTFS filtrado TIC</b> só com as viagens que passam nas paragens do TIC. O feed pode depois ser importado como circulações.</p>
+<img src="img/12-gtfs.png" width="664" alt="Feeds GTFS" style="width:100%;max-width:664px;border:1px solid #dee2e6;display:block;">
+</td></tr>
+
+<!-- 11 -->
+<tr><td style="padding:8px 28px;">
+<h2 style="font-size:18px;color:#0d6efd;border-bottom:2px solid #e7f0ff;padding-bottom:4px;">11. Importações (Excel e GTFS)</h2>
+<p>Cada importação fica registada como um <b>lote</b> numerado, que pode ser consultado, reimportado, atualizado com um ficheiro novo ou eliminado.</p>
+<img src="img/13-importacoes.png" width="664" alt="Lista de importações" style="width:100%;max-width:664px;border:1px solid #dee2e6;display:block;">
+<p>A importação da folha Excel de planeamento (operadores, paragens, circulações, calendário e percursos) mostra primeiro <b>o que
+vai ser criado ou atualizado</b> e os avisos de leitura; só depois se aplica. No mesmo ecrã é possível <b>comparar com um feed GTFS</b>
+(horas no TIC, dias e sequência de paragens).</p>
+<img src="img/14-importacao-detalhe.png" width="664" alt="Detalhe de uma importação Excel" style="width:100%;max-width:664px;border:1px solid #dee2e6;display:block;">
+</td></tr>
+
+<!-- 12 -->
+<tr><td style="padding:8px 28px;">
+<h2 style="font-size:18px;color:#0d6efd;border-bottom:2px solid #e7f0ff;padding-bottom:4px;">12. Utilizadores e registos</h2>
+<p>O administrador cria os utilizadores e associa cada um a um operador ou grupo. Em <b>Registos</b> fica o histórico de
+atividade: sessões, carregamentos GTFS, alterações de dados e administração.</p>
+<img src="img/17-utilizadores.png" width="664" alt="Gestão de utilizadores" style="width:100%;max-width:664px;border:1px solid #dee2e6;display:block;">
+</td></tr>
+
+<!-- 13 -->
+<tr><td style="padding:8px 28px;">
+<h2 style="font-size:18px;color:#0d6efd;border-bottom:2px solid #e7f0ff;padding-bottom:4px;">13. O que vê um operador</h2>
+<p>Com o perfil de operador o menu é reduzido (Paragens, Circulações, Pedidos, DCP, Calendário, Exportação, Feeds GTFS) e toda a
+informação está limitada ao seu operador ou grupo. A página inicial avisa dos alvarás e autorizações a expirar nos próximos 60 dias.</p>
+<img src="img/20-utilizador-inicio.png" width="664" alt="Página inicial de um operador" style="width:100%;max-width:664px;border:1px solid #dee2e6;display:block;">
+<img src="img/21-utilizador-circulacoes.png" width="664" alt="Circulações vistas por um operador" style="width:100%;max-width:664px;border:1px solid #dee2e6;display:block;margin-top:10px;">
+</td></tr>
+
+<tr><td style="padding:16px 28px 28px;">
+<p>Fico disponível para qualquer esclarecimento ou para uma demonstração.</p>
+<p>Com os melhores cumprimentos,<br>Arménio Miranda</p>
+</td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>
