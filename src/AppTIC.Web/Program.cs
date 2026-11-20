@@ -82,6 +82,7 @@ builder.Services.AddSingleton<ITerminalStateStore, InMemoryTerminalStateStore>()
 builder.Services.Configure<FlixbusOptions>(builder.Configuration.GetSection(FlixbusOptions.Section));
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<FlixbusRealtimeStore>();
+builder.Services.AddSingleton<RastoStore>(); // últimos 10 min de posições (FlixBus, STCP, CP) para o rasto no mapa
 builder.Services.AddHttpClient<FlixbusClient>((sp, http) =>
 {
     var opt = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<FlixbusOptions>>().Value;
@@ -90,6 +91,37 @@ builder.Services.AddHttpClient<FlixbusClient>((sp, http) =>
     http.DefaultRequestHeaders.UserAgent.ParseAdd("AppTIC/1.0");
 });
 builder.Services.AddHostedService<FlixbusRealtimeWorker>();
+
+// STCP em tempo real (FIWARE da Porto Digital + GTFS dos dados abertos), filtrado às paragens do TIC.
+builder.Services.Configure<StcpOptions>(builder.Configuration.GetSection(StcpOptions.Section));
+builder.Services.AddSingleton<StcpRealtimeStore>();
+builder.Services.AddHttpClient<StcpClient>(http =>
+{
+    http.Timeout = TimeSpan.FromSeconds(120); // o GTFS tem ~10 MB
+    http.DefaultRequestHeaders.UserAgent.ParseAdd("AppTIC/1.0");
+});
+builder.Services.AddHostedService<StcpRealtimeWorker>();
+
+// CP (comboios.live) e Metro do Porto (GTFS + estado das linhas) na estação de Campanhã.
+builder.Services.Configure<CpOptions>(builder.Configuration.GetSection(CpOptions.Section));
+builder.Services.AddSingleton<CpRealtimeStore>();
+builder.Services.AddHttpClient<CpClient>((sp, http) =>
+{
+    var opt = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<CpOptions>>().Value;
+    http.BaseAddress = new Uri(opt.BaseUrl.EndsWith('/') ? opt.BaseUrl : opt.BaseUrl + "/");
+    http.Timeout = TimeSpan.FromSeconds(20);
+    http.DefaultRequestHeaders.UserAgent.ParseAdd("AppTIC/1.0");
+});
+builder.Services.AddHostedService<CpRealtimeWorker>();
+
+builder.Services.Configure<MetroOptions>(builder.Configuration.GetSection(MetroOptions.Section));
+builder.Services.AddSingleton<MetroRealtimeStore>();
+builder.Services.AddHttpClient<MetroClient>(http =>
+{
+    http.Timeout = TimeSpan.FromSeconds(60);
+    http.DefaultRequestHeaders.UserAgent.ParseAdd("AppTIC/1.0");
+});
+builder.Services.AddHostedService<MetroRealtimeWorker>();
 builder.Services.AddAntiforgery(options => options.HeaderName = "RequestVerificationToken");
 // PascalCase como nos controladores MVC: o simulacao.js lê Token, Mensagem, Alocacoes, etc.
 builder.Services.ConfigureHttpJsonOptions(options =>
@@ -215,6 +247,18 @@ terminalApi.MapPost("/partida/{id}", (string id, ITerminalStateStore store) =>
 
 // FlixBus em tempo real: último estado em cache (atualizado pelo FlixbusRealtimeWorker).
 app.MapGet("/api/flixbus/tic", (FlixbusRealtimeStore store) => Results.Ok(store.Atual))
+    .RequireAuthorization();
+
+// STCP em tempo real: autocarros das viagens que param no TIC (cache do StcpRealtimeWorker).
+app.MapGet("/api/stcp/tic", (StcpRealtimeStore store) => Results.Ok(store.Atual))
+    .RequireAuthorization();
+app.MapGet("/api/cp/tic", (CpRealtimeStore store) => Results.Ok(store.Atual))
+    .RequireAuthorization();
+app.MapGet("/api/metro/tic", (MetroRealtimeStore store) => Results.Ok(store.Atual))
+    .RequireAuthorization();
+// Rasto dos últimos 10 min por veículo: { "stcp:1832": [[lon, lat, unixSeg], ...], ... }
+app.MapGet("/api/tempo-real/rastos", (RastoStore rastos) => Results.Ok(rastos.Obter().ToDictionary(
+        r => r.Key, r => r.Value.Select(p => new double[] { p.Longitude, p.Latitude, p.Hora.ToUnixTimeSeconds() }).ToList())))
     .RequireAuthorization();
 
 // Traçado de uma viagem FlixBus (polylines codificadas), pedido pelo mapa ao clicar num autocarro.

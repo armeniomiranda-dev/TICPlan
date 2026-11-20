@@ -1,133 +1,196 @@
 @using AppTIC.Web.Services
-@model FlixbusSnapshot
+@using AppTIC.Web.Controllers
+@model TempoRealViewModel
 @{
-    ViewData["Title"] = "Tempo real FlixBus";
+    ViewData["Title"] = "Tempo real";
     var agora = DateTimeOffset.Now;
+    var (flix, stcp, cp, metro) = (Model.Flixbus, Model.Stcp, Model.Cp, Model.Metro);
+    static string Hora(DateTimeOffset? h) => h is { } x ? x.ToLocalTime().ToString("HH:mm:ss") : "a aguardar…";
+
+    var tipos = new (string Id, string Nome, string Icone, TipoServico? Tipo)[]
+    {
+        ("todos", "Todos", "bi-grid", null),
+        ("Autocarro", "Autocarros", "bi-bus-front", TipoServico.Autocarro),
+        ("Comboio", "Comboios", "bi-train-front", TipoServico.Comboio),
+        ("Metro", "Metro", "bi-train-lightrail-front", TipoServico.Metro)
+    };
+
+    static string IconeTipo(TipoServico t) => t switch
+    {
+        TipoServico.Comboio => "bi-train-front",
+        TipoServico.Metro => "bi-train-lightrail-front",
+        _ => "bi-bus-front"
+    };
+
+    static (string Classe, string Texto) Estado(LinhaTempoReal l) => l switch
+    {
+        { Cancelada: true } => ("bg-danger", l.Tipo == TipoServico.Comboio ? "Suprimido" : "Cancelado"),
+        { TempoReal: false } => ("bg-light text-dark border", "Horário"),
+        { Sentido: SentidoTic.NoTic } => ("bg-success", l.AtrasoMinutos >= 3 ? $"Em Campanhã (+{l.AtrasoMinutos})" : "Em Campanhã"),
+        { Sentido: SentidoTic.Partiu } => ("bg-secondary", "Já passou"),
+        { AtrasoMinutos: null } => ("bg-light text-dark border", "Sem dados"),
+        { AtrasoMinutos: >= 15 } => ("bg-danger", $"+{l.AtrasoMinutos} min"),
+        { AtrasoMinutos: >= 3 } => ("bg-warning text-dark", $"+{l.AtrasoMinutos} min"),
+        { AtrasoMinutos: <= -2 } => ("bg-info text-dark", $"{l.AtrasoMinutos} min"),
+        _ => ("bg-success", "A horas")
+    };
 }
 <div class="page-header">
-    <h1><i class="bi bi-broadcast"></i> Tempo real FlixBus – TIC Campanhã</h1>
+    <h1><i class="bi bi-broadcast"></i> Tempo real – Campanhã (TIC)</h1>
     <div class="text-muted small" id="tempo-real-hora">
-        @if (Model.ObtidoEm is { } obtido)
-        {
-            <span>Atualizado às @obtido.ToLocalTime().ToString("HH:mm:ss") · atualiza a cada 10 segundos</span>
-        }
-        else
-        {
-            <span>A aguardar a primeira leitura da FlixBus…</span>
-        }
+        <span>FlixBus @Hora(flix.ObtidoEm)</span> · <span>STCP @Hora(stcp.ObtidoEm)</span> ·
+        <span>CP @Hora(cp.ObtidoEm)</span> · <span>Metro @Hora(metro.ObtidoEm)</span> ·
+        <span>atualiza a cada 10 segundos</span>
     </div>
 </div>
 
 <div id="tempo-real-erro">
-    @if (Model.Erro is { } erro)
+    @foreach (var erro in new[] { flix.Erro, stcp.Erro, cp.Erro, metro.Erro }.OfType<string>())
     {
         <div class="alert alert-warning py-2"><i class="bi bi-exclamation-triangle"></i> @erro</div>
     }
-</div>
-
-<div class="card mb-3">
-    <div class="card-header d-flex flex-wrap gap-3 align-items-center">
-        <span class="fw-semibold"><i class="bi bi-geo-alt"></i> Autocarros em viagem com passagem no TIC</span>
-        <span class="small d-flex flex-wrap gap-3 ms-auto">
-            <span><span class="legenda-veiculo" style="background:#0d6efd"></span> A caminho <span id="n-ACaminho" class="text-muted"></span></span>
-            <span><span class="legenda-veiculo" style="background:#198754"></span> No TIC <span id="n-NoTic" class="text-muted"></span></span>
-            <span><span class="legenda-veiculo" style="background:#6c757d"></span> Partiu <span id="n-Partiu" class="text-muted"></span></span>
-            <span><span class="legenda-veiculo" style="background:#fff;border:2px dashed #6c757d"></span> GPS desatualizado</span>
-        </span>
-    </div>
-    <div class="position-relative">
-        <div id="flixbus-mapa" style="height:480px"></div>
-        <div id="flixbus-popup" class="mapa-popup"></div>
-    </div>
-    <div class="card-footer small text-muted">Passe o rato sobre um autocarro para ver a viagem; clique para mostrar o traçado. Só aparecem viagens com hora no TIC entre 1h30 atrás e 3h à frente e com GPS disponível.</div>
-</div>
-
-<div class="row g-3" id="tempo-real-tabelas">
-    @foreach (var (titulo, icone, lista, extremo) in new[]
+    @if (metro.GtfsValidoAte is { } validoAte && validoAte < DateOnly.FromDateTime(DateTime.Today).AddDays(7))
     {
-        ("Chegadas", "bi-box-arrow-in-down-right", Model.Chegadas, "Origem"),
-        ("Partidas", "bi-box-arrow-up-right", Model.Partidas, "Destino")
-    })
+        <div class="alert alert-warning py-2"><i class="bi bi-calendar-x"></i> O horário (GTFS) da Metro do Porto é válido só até @validoAte.ToString("dd/MM/yyyy").</div>
+    }
+    @if (metro.EstadoLinhas.Where(l => !l.Normal).ToList() is { Count: > 0 } perturbadas)
     {
-        <div class="col-xl-6">
-            <div class="card">
-                <div class="card-header fw-semibold"><i class="bi @icone"></i> @titulo <span class="badge bg-secondary">@lista.Count</span></div>
-                <div class="table-responsive">
-                    <table class="table table-sm table-hover mb-0 align-middle">
-                        <thead>
-                            <tr>
-                                <th>Prevista</th>
-                                <th>Estimada</th>
-                                <th>Linha</th>
-                                <th>@extremo</th>
-                                <th>Estado</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @if (lista.Count == 0)
-                            {
-                                <tr><td colspan="5" class="text-muted text-center">Sem viagens na janela atual.</td></tr>
-                            }
-                            @foreach (var p in lista)
-                            {
-                                var passada = p.Estimada < agora;
-                                var (classe, texto) = p switch
-                                {
-                                    { Cancelada: true } => ("bg-danger", "Cancelada"),
-                                    { AtrasoMinutos: null } => ("bg-light text-dark border", "Sem dados"),
-                                    { AtrasoMinutos: >= 15 } => ("bg-danger", $"+{p.AtrasoMinutos} min"),
-                                    { AtrasoMinutos: >= 3 } => ("bg-warning text-dark", $"+{p.AtrasoMinutos} min"),
-                                    { AtrasoMinutos: <= -2 } => ("bg-info text-dark", $"{p.AtrasoMinutos} min"),
-                                    _ => ("bg-success", "A horas")
-                                };
-                                <tr class="@(passada ? "text-muted" : "")" title="@p.Percurso">
-                                    <td class="@(p.Cancelada ? "text-decoration-line-through" : "")">@p.Planeada.ToString("HH:mm")</td>
-                                    <td class="fw-semibold">@(p.AtrasoMinutos is null || p.Cancelada ? "–" : p.Estimada.ToString("HH:mm"))</td>
-                                    <td class="text-nowrap">@p.Linha@(p.Viagem is { } v ? $" #{v}" : "")</td>
-                                    <td>@p.Extremo</td>
-                                    <td><span class="badge @classe">@texto</span></td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
+        <div class="alert alert-warning py-2"><i class="bi bi-exclamation-octagon"></i> Metro do Porto:
+            @string.Join(" · ", perturbadas.Select(l => $"linha {l.Linha} ({l.Percurso}) {l.Estado.ToLowerInvariant()}"))</div>
     }
 </div>
-<p class="text-muted small mt-2">Fonte: API pública da FlixBus (horários por estação, com desvios em tempo real). Os dados também estão disponíveis em JSON em <code>/api/flixbus/tic</code>.</p>
+
+<div class="row g-3">
+    @* Mapa: à direita em ecrãs largos (fica visível ao percorrer a tabela), por cima nos restantes. *@
+    <div class="col-xxl-5 order-xxl-2">
+        <div class="card mapa-fixo">
+            <div class="card-header d-flex flex-wrap gap-2 align-items-center small">
+                <span class="fw-semibold"><i class="bi bi-geo-alt"></i> Mapa</span>
+                <label class="form-check form-check-inline m-0"><input class="form-check-input" type="checkbox" id="mostrar-flixbus" checked>
+                    <span class="legenda-forma redonda"></span> FlixBus <span id="n-FlixBus" class="text-muted"></span></label>
+                <label class="form-check form-check-inline m-0"><input class="form-check-input" type="checkbox" id="mostrar-stcp" checked>
+                    <span class="legenda-forma"></span> STCP <span id="n-Stcp" class="text-muted"></span></label>
+                <label class="form-check form-check-inline m-0"><input class="form-check-input" type="checkbox" id="mostrar-cp" checked>
+                    <span class="legenda-forma hexagono"></span> CP <span id="n-Cp" class="text-muted"></span></label>
+                <label class="form-check form-check-inline m-0"><input class="form-check-input" type="checkbox" id="mostrar-rastos" checked>
+                    <span class="legenda-rasto"></span> Rasto 10 min</label>
+            </div>
+            <div class="px-2 py-1 small d-flex flex-wrap gap-3 border-bottom">
+                <span><span class="legenda-veiculo" style="background:#0d6efd"></span> A caminho <span id="n-ACaminho" class="text-muted"></span></span>
+                <span><span class="legenda-veiculo" style="background:#198754"></span> Em Campanhã <span id="n-NoTic" class="text-muted"></span></span>
+                <span><span class="legenda-veiculo" style="background:#6c757d"></span> Já passou <span id="n-Partiu" class="text-muted"></span></span>
+                <span><span class="legenda-veiculo" style="background:#fff;border:2px dashed #6c757d"></span> GPS desatualizado</span>
+            </div>
+            <div id="selecao-mapa" class="alert alert-primary rounded-0 m-0 py-1 px-2 small d-none d-flex align-items-center gap-2">
+                <i class="bi bi-funnel"></i> <span id="selecao-texto" class="flex-grow-1"></span>
+                <button type="button" class="btn btn-sm btn-outline-primary py-0" id="selecao-limpar"><i class="bi bi-x-lg"></i> Mostrar todos</button>
+            </div>
+            <div class="position-relative">
+                <div id="tempo-real-mapa"></div>
+                <div id="tempo-real-popup" class="mapa-popup"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xxl-7 order-xxl-1">
+        <div class="card">
+            <div class="card-header d-flex flex-wrap gap-2 align-items-center">
+                <span class="fw-semibold me-2"><i class="bi bi-list-ol"></i> Passagens por Campanhã</span>
+                <div class="btn-group btn-group-sm" role="group" aria-label="Tipo de serviço" id="filtro-tipo">
+                    @foreach (var t in tipos)
+                    {
+                        <button type="button" class="btn btn-outline-secondary" data-tipo="@t.Id">
+                            <i class="bi @t.Icone"></i> @t.Nome <span class="badge text-bg-light" data-contagem="@t.Id"></span>
+                        </button>
+                    }
+                </div>
+                <form method="get" class="ms-auto">
+                    <select name="horas" class="form-select form-select-sm" onchange="this.form.submit()" aria-label="Janela">
+                        @foreach (var h in TempoRealController.HorasPossiveis)
+                        {
+                            <option value="@h" selected="@(h == Model.Horas)">Próxima@(h == 1 ? "" : "s") @h hora@(h == 1 ? "" : "s")</option>
+                        }
+                    </select>
+                </form>
+            </div>
+            <div class="tabela-tempo-real">
+                <table class="table table-sm table-hover mb-0 align-middle">
+                    <thead class="sticky-top">
+                        <tr>
+                            <th>Prevista</th>
+                            <th>Estimada</th>
+                            <th>Em</th>
+                            <th>Serviço</th>
+                            <th>Linha</th>
+                            <th>Origem → Destino</th>
+                            <th>Paragem</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tempo-real-tabelas" data-total="@Model.Linhas.Count"
+                           data-contagens="@string.Join(",", Model.Linhas.GroupBy(l => l.Tipo).Select(g => $"{g.Key}:{g.Count()}"))">
+                        @if (Model.Linhas.Count == 0)
+                        {
+                            <tr><td colspan="8" class="text-muted text-center py-3">A aguardar dados…</td></tr>
+                        }
+                        @foreach (var l in Model.Linhas)
+                        {
+                            var (classe, texto) = Estado(l);
+                            var minutos = (int)Math.Round((l.Estimada - agora).TotalMinutes);
+                            var passada = l.Sentido == SentidoTic.Partiu || l.Estimada < agora.AddMinutes(-1);
+                            <tr class="linha-passagem @(passada ? "text-muted" : "")" data-chave="@l.Chave" data-tipo="@l.Tipo"
+                                data-posicao="@(l.TemPosicao ? "1" : "0")" title="@l.ParagemDescricao · @l.Movimento">
+                                <td class="@(l.Cancelada || l.Estimada != l.Prevista ? "text-decoration-line-through text-muted" : "")">@l.Prevista.ToString("HH:mm")</td>
+                                <td class="fw-semibold">@(l.Cancelada ? "–" : l.Estimada.ToString("HH:mm"))</td>
+                                <td class="text-nowrap small">@(passada ? "" : minutos <= 0 ? "agora" : $"{minutos} min")</td>
+                                <td class="text-nowrap">
+                                    <i class="bi @IconeTipo(l.Tipo)"></i> @l.Operador
+                                    @if (l.TemPosicao) { <i class="bi bi-geo-alt-fill text-primary small" title="Com posição GPS"></i> }
+                                </td>
+                                <td><span class="badge" style="background:@(l.Cor ?? "#6c757d");color:@(l.CorTexto ?? "#fff")">@l.Linha</span></td>
+                                <td>@(l.Origem is null ? "" : l.Origem + " → ")@l.Destino</td>
+                                <td class="text-nowrap" title="@l.ParagemDescricao"><span class="badge text-bg-light border">@l.Paragem</span> <span class="small text-muted">@l.Movimento.ToLowerInvariant()</span></td>
+                                <td><span class="badge @classe">@texto</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <p class="text-muted small mt-2">
+            Ordenado pela hora estimada em Campanhã (inclui os últimos 15 min). Fontes: API pública da FlixBus; STCP: Urban Platform
+            (FIWARE) da Porto Digital e GTFS dos dados abertos da Câmara do Porto (atraso estimado pela posição); CP: comboios.live;
+            Metro do Porto: GTFS oficial (sem tempo real) e estado das linhas do site da Metro.
+        </p>
+    </div>
+</div>
 
 @section Head {
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.2.1/ol.css" />
     <style>
         .legenda-veiculo { display: inline-block; width: 12px; height: 12px; border-radius: 50%; vertical-align: -1px; }
-        .mapa-popup { position: absolute; display: none; pointer-events: none; z-index: 10; max-width: 340px;
+        .legenda-forma { display: inline-block; width: 11px; height: 11px; background: #495057; vertical-align: -1px; margin-left: .15rem; }
+        .legenda-forma.redonda { border-radius: 50%; }
+        .legenda-forma.hexagono { clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%); width: 13px; }
+        .legenda-rasto { display: inline-block; width: 18px; height: 0; border-top: 3px solid rgba(13,110,253,.5); vertical-align: 3px; }
+        .mapa-popup { position: absolute; display: none; pointer-events: none; z-index: 10; max-width: 360px;
             background: #fff; border: 1px solid #ced4da; border-radius: .375rem; padding: .4rem .6rem; font-size: .8rem;
             box-shadow: 0 .25rem .75rem rgba(0,0,0,.15); }
+        #tempo-real-mapa { height: 420px; }
+        .tabela-tempo-real { max-height: 70vh; overflow: auto; }
+        .tabela-tempo-real thead th { background: var(--bs-body-bg); box-shadow: inset 0 -1px 0 var(--bs-border-color); }
+        .linha-passagem { cursor: pointer; }
+        .linha-passagem.selecionada > td { background: rgba(13,110,253,.12) !important; }
+        .linha-passagem.selecionada > td:first-child { box-shadow: inset 3px 0 0 #0d6efd; }
+        @@media (min-width: 1400px) {
+            .mapa-fixo { position: sticky; top: .75rem; }
+            #tempo-real-mapa { height: calc(70vh - 40px); }
+        }
     </style>
 }
 
 @section Scripts {
     <script src="https://cdn.jsdelivr.net/npm/ol@10.2.1/dist/ol.js"></script>
-    <script src="~/js/flixbus-mapa.js" asp-append-version="true"></script>
-    <script>
-        const INTERVALO = 10000;
-        flixbusMapa(document.getElementById('flixbus-mapa'), document.getElementById('flixbus-popup'), {
-            intervaloMs: INTERVALO,
-            onContagem: n => ['ACaminho', 'NoTic', 'Partiu'].forEach(s => document.getElementById('n-' + s).textContent = `(${n[s]})`)
-        });
-        // As tabelas são geradas no servidor: a cada 10 s pede a página de novo e troca só a hora, o aviso e as tabelas
-        // (sem recarregar, para o mapa não perder zoom nem seleção).
-        setInterval(async () => {
-            try {
-                const r = await fetch(location.href, { headers: { Accept: 'text/html' } });
-                if (!r.ok || r.redirected) return; // sessão expirada: mantém o que está
-                const doc = new DOMParser().parseFromString(await r.text(), 'text/html');
-                for (const id of ['tempo-real-hora', 'tempo-real-erro', 'tempo-real-tabelas']) {
-                    const novo = doc.getElementById(id), atual = document.getElementById(id);
-                    if (novo && atual) atual.replaceWith(novo);
-                }
-            } catch { /* mantém o último estado */ }
-        }, INTERVALO);
-    </script>
+    <script src="~/js/tempo-real-mapa.js" asp-append-version="true"></script>
+    <script src="~/js/tempo-real.js" asp-append-version="true"></script>
 }

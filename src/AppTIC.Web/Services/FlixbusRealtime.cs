@@ -291,7 +291,7 @@ public class FlixbusRealtimeStore
 
 /// <summary>Atualiza periodicamente as chegadas e partidas da FlixBus no TIC.</summary>
 public class FlixbusRealtimeWorker(
-    IServiceScopeFactory scopes, FlixbusRealtimeStore store, IOptions<FlixbusOptions> options,
+    IServiceScopeFactory scopes, FlixbusRealtimeStore store, IOptions<FlixbusOptions> options, RastoStore rastos,
     ILogger<FlixbusRealtimeWorker> logger, TimeProvider tempo) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken ct)
@@ -326,6 +326,7 @@ public class FlixbusRealtimeWorker(
             var posicoes = await ObterPosicoesAsync(client, opt, chegadas.Passagens, partidas.Passagens, agora, ct);
             store.Definir(new FlixbusSnapshot(chegadas.Passagens, partidas.Passagens, agora, null,
                 posicoes, chegadas.Estacao ?? partidas.Estacao));
+            rastos.Registar("flixbus", posicoes.Select(p => (p.RideUuid, p.Latitude, p.Longitude, p.AtualizadoEm)));
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
         catch (Exception ex)
