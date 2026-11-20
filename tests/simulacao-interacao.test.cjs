@@ -7,6 +7,7 @@ const vm = require('node:vm');
 const planta = require('../src/AppTIC.Web/wwwroot/js/simulacao-planta.js');
 const planeador = require('../src/AppTIC.Web/wwwroot/js/simulacao-planeador.js');
 const indicadores = require('../src/AppTIC.Web/wwwroot/js/simulacao-indicadores.js');
+const comparacao = require('../src/AppTIC.Web/wwwroot/js/simulacao-comparacao.js');
 
 class Elemento {
     constructor() {
@@ -99,6 +100,7 @@ test('plano do dia usa a categoria e o despacho acrescenta um carro fora do plan
         SimulacaoPlanta: planta,
         SimulacaoPlaneador: planeador,
         SimulacaoIndicadores: indicadores,
+        SimulacaoComparacao: comparacao,
         requestAnimationFrame: () => {},
         fetch: async (url, options = {}) => {
             const alvo = String(url);
@@ -183,4 +185,36 @@ test('plano do dia usa a categoria e o despacho acrescenta um carro fora do plan
     await new Promise(resolve => setTimeout(resolve, 400));
     assert.equal(pedidosPlaneamento.at(-1).Categorias.length, 4);
     assert.equal(get('sim-legenda-corpo').children.length, 4);
+
+    // Comparação de cenários: três planos de raiz (Livre, Região, Permanência) e uma tabela com uma coluna por cenário.
+    const antesComparar = pedidosPlaneamento.length;
+    assert.equal(get('sim-cmp-run').disabled, false);
+    await get('sim-cmp-run').listeners.click();
+    const pedidosCmp = pedidosPlaneamento.slice(antesComparar);
+    assert.deepEqual(pedidosCmp.map(p => p.Categorias.map(c => c.Id).join('+')),
+        ['Livre', 'Lisboa+Internacional+Norte+Comum', 'Rapida+Intermedia+Espera+' + pedidosCmp[2].Categorias[3].Id]);
+    assert.equal(pedidosCmp[0].Categorias[0].Cais.length, 17);
+    assert.ok(pedidosCmp.every(p => p.Autocarros.every(a => a.CaisFixo === null)));
+    const tabela = get('sim-cmp-tabela').children[0];
+    assert.equal(tabela.children[0].children[0].children.length, 4);
+    assert.match(get('sim-cmp-grafico').innerHTML, /^<svg/);
+    assert.match(get('sim-events').children[0].textContent, /\[Comparação\] Livre: \d+\/\d+ com cais/);
+
+    // Zonamento livre: todas as circulações na única categoria, com os 17 cais, e sem gestão de tipologias.
+    get('sim-mode').value = 'Livre';
+    get('sim-mode').listeners.change();
+    await new Promise(resolve => setTimeout(resolve, 400));
+    const livre = pedidosPlaneamento.at(-1);
+    assert.deepEqual(livre.Categorias.map(c => [c.Id, c.Cais.length, c.Reserva]), [['Livre', 17, false]]);
+    assert.equal(livre.UltimoRecurso, false);
+    assert.ok(livre.Autocarros.filter(p => !p.AutocarroId.startsWith('extra-')).every(p => p.Categoria === 'Livre'));
+    assert.equal(get('sim-legenda-corpo').children.length, 1);
+    assert.equal(get('sim-config-add').hidden, true);
+    assert.equal(get('sim-config-cais-bloco').hidden, true);
+    assert.match(get('sim-kpi-nota').textContent, /zonamento livre/);
+
+    // De volta à região, os controlos de gestão reaparecem.
+    get('sim-mode').value = 'Regiao';
+    get('sim-mode').listeners.change();
+    assert.equal(get('sim-config-add').hidden, false);
 });

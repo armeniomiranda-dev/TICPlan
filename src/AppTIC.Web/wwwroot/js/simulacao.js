@@ -7,7 +7,7 @@
     const numerosCais = SimulacaoPlanta.cais.map(c => c.id);
     const caisPorId = new Map(SimulacaoPlanta.cais.map(c => [c.id, c]));
     const CHAVE_CONFIG = 'apptic.simulacao.zonamento.v1';
-    const nomesModo = { Regiao: 'por região', Permanencia: 'por tempo de permanência' };
+    const nomesModo = { Livre: 'livre (qualquer cais)', Regiao: 'por região', Permanencia: 'por tempo de permanência' };
     const paleta = ['#06b6d4', '#ec4899', '#84cc16', '#f97316', '#8b5cf6', '#14b8a6', '#f43f5e', '#0ea5e9'];
     const canvas = el('sim-canvas');
     const ctx = canvas.getContext('2d');
@@ -26,6 +26,7 @@
     let filas = new Map();
     let filasDe = null;
     let indicadoresDe = null;
+    let versaoComparacao = 0;
     let config = carregarConfig();
 
     /** Zonamento (modo e tipologias dos cais): fica guardado neste browser, nunca na base de dados. */
@@ -33,9 +34,13 @@
         const omissao = { modo: 'Regiao', esquemas: SimulacaoPlaneador.esquemasPorOmissao(ordemSaida) };
         try {
             const guardado = JSON.parse(globalThis.localStorage?.getItem(CHAVE_CONFIG) ?? 'null');
-            const valido = guardado && Object.hasOwn(omissao.esquemas, guardado.modo) &&
-                Object.keys(omissao.esquemas).every(m => Array.isArray(guardado.esquemas?.[m]?.categorias) && typeof guardado.esquemas[m].cais === 'object');
-            if (valido) return guardado;
+            const esquemaValido = e => Array.isArray(e?.categorias) && e.categorias.length > 0 && e.cais && typeof e.cais === 'object';
+            if (guardado && Object.hasOwn(omissao.esquemas, guardado.modo)) {
+                // Mantém os esquemas guardados válidos; os que faltam (ex.: o modo Livre, acrescentado depois) vêm da predefinição.
+                const esquemas = Object.fromEntries(Object.entries(omissao.esquemas)
+                    .map(([m, e]) => [m, esquemaValido(guardado.esquemas?.[m]) ? guardado.esquemas[m] : e]));
+                if (esquemaValido(esquemas[guardado.modo])) return { modo: guardado.modo, esquemas };
+            }
         } catch { /* configuração ilegível: usa a predefinida */ }
         return omissao;
     }
@@ -51,18 +56,21 @@
     const caisDe = id => SimulacaoPlaneador.caisDaCategoria(esquema(), id);
     const minutosDe = v => (v.FimSegundos - v.InicioSegundos) / 60;
 
-    /** Zona que a circulação recebe sem intervenção: a sua categoria (por região) ou a do tempo de paragem. */
-    function zonaAutomatica(v) {
-        if (esquema().criterio === 'Permanencia') return SimulacaoPlaneador.categoriaPorPermanencia(esquema(), minutosDe(v));
-        return categoria(v.Categoria ?? '') ? v.Categoria : '';
+    /**
+     * Zona simulada num modo de zonamento: a escolhida à mão nesse modo ou, sem escolha, a automática
+     * (a categoria da circulação, por região, a do tempo de paragem, por permanência, ou a única categoria, no livre).
+     */
+    function zonaNoModo(v, modo) {
+        const e = config.esquemas[modo];
+        const existe = id => SimulacaoPlaneador.categoriaDe(e, id) !== null;
+        const manual = v.manual[modo];
+        if (manual !== undefined) return manual === '' || existe(manual) ? manual : '';
+        if (e.criterio === 'Livre') return e.categorias[0]?.id ?? '';
+        if (e.criterio === 'Permanencia') return SimulacaoPlaneador.categoriaPorPermanencia(e, minutosDe(v));
+        return existe(v.Categoria ?? '') ? v.Categoria : '';
     }
 
-    /** Zona simulada: a escolhida à mão neste modo de zonamento ou, sem escolha, a automática. */
-    function zonaDe(v) {
-        const manual = v.manual[config.modo];
-        if (manual === undefined) return zonaAutomatica(v);
-        return manual === '' || categoria(manual) ? manual : '';
-    }
+    const zonaDe = v => zonaNoModo(v, config.modo);
 
     /** [1, 2, 3, 4, 9] → "1–4, 9". */
     function formatarCais(lista) {
@@ -153,6 +161,7 @@
     /** Planeamento do dia com Otimização: devolve a promessa do plano (ou null se falhou). */
     async function planear() {
         clearTimeout(temporizadorPlaneamento);
+        invalidarComparacao();
         const versao = ++versaoPlaneamento;
         const candidatas = viagens
             .filter(v => categoria(zonaDe(v)) && v.FimSegundos > v.InicioSegundos)
@@ -451,6 +460,111 @@
         });
     }
 
+    /** Planeia (de raiz) e avalia um cenário da comparação; uma falha do servidor fica no resultado. */
+    async function avaliarCenario(cenario) {
+        const passagens = viagens.map(v => ({
+            id: v.Id, inicio: v.InicioSegundos, fim: v.FimSegundos,
+            zona: cenario.id === 'Livre' ? 'Livre' : zonaNoModo(v, cenario.id)
+        }));
+        const filasCenario = comCais => SimulacaoPlanta.filas(comCais.map(p => ({ id: p.id, cais: caisPorId.get(p.cais), inicio: p.inicio, fim: p.fim })));
+        const base = { cenario, passagens, ordemSaida, totalCais: numerosCais.length, filas: filasCenario };
+        const corpo = SimulacaoComparacao.pedido(cenario, passagens, ordemSaida);
+        if (!corpo) return SimulacaoComparacao.avaliar({ ...base, plano: { Alocacoes: [], SemCais: [], Otimo: true } });
+        try {
+            return SimulacaoComparacao.avaliar({ ...base, plano: await pedidoTerminal('planear-dia', 'POST', corpo) });
+        } catch (erro) {
+            return SimulacaoComparacao.avaliar({ ...base, plano: null, erro: erro.message });
+        }
+    }
+
+    /** Planeia os três cenários em paralelo sobre as circulações carregadas e mostra os indicadores lado a lado. */
+    async function comparar() {
+        const versao = ++versaoComparacao;
+        const botao = el('sim-cmp-run');
+        botao.disabled = true;
+        el('sim-cmp-nota').textContent = `A planear 3 cenários com ${viagens.length} circulações...`;
+        try {
+            const cenarios = SimulacaoComparacao.cenarios(config.esquemas);
+            const resultados = await Promise.all(cenarios.map(avaliarCenario));
+            if (versao !== versaoComparacao) return;
+            renderComparacao(resultados);
+            const falhas = resultados.filter(r => r.erro);
+            el('sim-cmp-nota').textContent = falhas.length
+                ? `Falhou o planeamento de: ${falhas.map(r => `${r.cenario.nome} (${r.erro})`).join(', ')}`
+                : `${el('sim-date').value} · ${viagens.length} circulações` +
+                  (resultados.some(r => r.otimo === false) ? ' · algum plano ficou no limite de tempo (não provado ótimo)' : ' · todos os planos ótimos');
+            adicionarEvento(`[Comparação] ${resultados.map(r => `${r.cenario.nome}: ${r.comCais}/${r.planeadas} com cais`).join(' · ')}`);
+        } finally {
+            if (versao === versaoComparacao) botao.disabled = !viagens.length;
+        }
+    }
+
+    function renderComparacao(resultados) {
+        const tabela = document.createElement('table');
+        tabela.className = 'sim-cmp-tabela';
+        const cabecalho = document.createElement('tr');
+        cabecalho.append(texto('th', 'Indicador'));
+        for (const r of resultados) {
+            const th = document.createElement('th');
+            th.setAttribute('scope', 'col');
+            const marca = document.createElement('span');
+            marca.className = 'sim-zona';
+            marca.style?.setProperty('--cor', r.cenario.cor);
+            th.append(marca, texto('span', r.cenario.nome), texto('small', r.cenario.descricao));
+            if (!r.erro && r.planeadas === 0) th.append(texto('small', 'nenhuma circulação tem zona neste zonamento', 'sim-cmp-aviso'));
+            cabecalho.append(th);
+        }
+        const thead = document.createElement('thead');
+        thead.append(cabecalho);
+        const tbody = document.createElement('tbody');
+        let grupo = null;
+        for (const linha of SimulacaoComparacao.linhas(resultados)) {
+            if (linha.grupo !== grupo) {
+                grupo = linha.grupo;
+                const tr = document.createElement('tr');
+                const th = texto('th', grupo, 'sim-cmp-grupo');
+                th.setAttribute('colspan', String(resultados.length + 1));
+                tr.append(th);
+                tbody.append(tr);
+            }
+            const tr = document.createElement('tr');
+            const nome = document.createElement('th');
+            nome.setAttribute('scope', 'row');
+            nome.append(texto('span', linha.nome));
+            if (linha.ajuda) nome.append(texto('small', linha.ajuda));
+            tr.append(nome);
+            for (const c of linha.celulas) {
+                const td = document.createElement('td');
+                if (c.melhor) td.className = 'melhor';
+                td.append(texto('strong', c.melhor ? `✓ ${c.texto}` : c.texto));
+                if (c.delta) td.append(texto('small', `${c.delta} vs Livre`));
+                tr.append(td);
+            }
+            tbody.append(tr);
+        }
+        tabela.append(thead, tbody);
+        el('sim-cmp-tabela').replaceChildren(tabela);
+
+        const legenda = el('sim-cmp-legenda');
+        legenda.replaceChildren(...resultados.filter(r => r.k).map(r => {
+            const item = texto('span', r.cenario.nome);
+            const marca = document.createElement('span');
+            marca.className = 'sim-zona';
+            marca.style?.setProperty('--cor', r.cenario.cor);
+            item.prepend(marca);
+            return item;
+        }));
+        el('sim-cmp-grafico').innerHTML = SimulacaoComparacao.grafico(resultados);
+    }
+
+    /** Os dados ou o zonamento mudaram: a comparação mostrada deixa de corresponder. */
+    function invalidarComparacao() {
+        versaoComparacao++;
+        el('sim-cmp-run').disabled = !viagens.length;
+        if (el('sim-cmp-tabela').children.length)
+            el('sim-cmp-nota').textContent = 'Os dados ou o zonamento mudaram desde a última comparação; volte a comparar.';
+    }
+
     function atualizar() {
         const ativos = viagens.filter(v => alocacoes.has(v.Id) && v.InicioSegundos <= tempo && tempo < v.FimSegundos);
         const ocupados = ativos.filter(v => alocacoes.get(v.Id) != null);
@@ -563,6 +677,7 @@
         tempo = 0;
         criarLista();
         atualizar();
+        invalidarComparacao();
 
         ['sim-play', 'sim-reset', 'sim-time', 'sim-bulk-apply', 'sim-plan'].forEach(id => { el(id).disabled = true; });
         const status = el('sim-status');
@@ -675,6 +790,7 @@
     function renderLegenda() {
         const e = esquema();
         const porPermanencia = e.criterio === 'Permanencia';
+        const livre = e.criterio === 'Livre';
         const corpo = el('sim-legenda-corpo');
         corpo.replaceChildren();
         let anterior = null;
@@ -686,7 +802,8 @@
             marca.style?.setProperty('--cor', c.cor);
             nome.append(marca, texto('span', c.nome));
 
-            let criterio = 'Categoria da circulação ou escolha manual';
+            let criterio = livre ? 'Todas as circulações · primeiro cais que o algoritmo encontrar livre, sem zonas'
+                : 'Categoria da circulação ou escolha manual';
             if (porPermanencia) {
                 criterio = c.ateMinutos != null ? `Paragens até ${c.ateMinutos} min`
                     : anterior != null ? `Paragens com mais de ${anterior} min` : 'Restantes paragens';
@@ -715,13 +832,19 @@
         };
         const categorias = e.categorias.map(c => [c.id, c.nome]);
         preencher('sim-dispatch-zone', porPermanencia ? [['*', 'Automática (pela permanência)'], ...categorias] : categorias);
-        preencher('sim-bulk-zone', [['*', porPermanencia ? 'Automática (pela permanência)' : 'Categoria da circulação'], ['', 'Sem zona'], ...categorias]);
+        const automatica = porPermanencia ? 'Automática (pela permanência)' : livre ? 'Automática (todas em Livre)' : 'Categoria da circulação';
+        preencher('sim-bulk-zone', [['*', automatica], ['', 'Sem zona'], ...categorias]);
     }
 
     /** Painel de gestão: categorias do esquema em uso e tipologia de cada cais. */
     function renderConfig() {
         const e = esquema();
         const porPermanencia = e.criterio === 'Permanencia';
+        // No zonamento livre só se muda o nome e a cor: mais categorias ou tipologias deixariam de ser "livre".
+        const livre = e.criterio === 'Livre';
+        el('sim-config-add').hidden = livre;
+        el('sim-config-ultimo-campo').hidden = livre;
+        el('sim-config-cais-bloco').hidden = livre;
         const campo = (rotuloCampo, controlo) => {
             const label = texto('label', rotuloCampo);
             label.append(controlo);
@@ -750,6 +873,11 @@
                 ate.min = '0';
                 ate.placeholder = 'sem limite';
                 linha.append(campo('Paragens até (min)', ate));
+            }
+            if (livre) {
+                linha.append(texto('span', `Cais: ${formatarCais(caisDe(c.id))}`, 'sim-config-cais-lista'));
+                lista.append(linha);
+                continue;
             }
             const preferencia = document.createElement('select');
             preferencia.append(opcao('Nenhuma', 'Indiferente'), opcao('Saida', 'Junto à saída'), opcao('Fundo', 'No fundo do canal'));
@@ -826,6 +954,7 @@
 
     el('sim-load').addEventListener('click', carregar);
     el('sim-plan').addEventListener('click', () => planear());
+    el('sim-cmp-run').addEventListener('click', () => comparar());
     el('sim-date').addEventListener('change', carregar);
     el('sim-dispatch-form').addEventListener('submit', onDespachar);
     el('sim-dispatch-dock').addEventListener('click', onAtracar);

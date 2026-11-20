@@ -106,7 +106,8 @@ const SimulacaoIndicadores = (() => {
             desvio: comLimite.length ? comLimite.filter(p => (p.fim - p.inicio) / 60 > p.limiteMinutos).length / comLimite.length : null,
             veiculosComLimite: comLimite.length,
             entradasPorHora,
-            ocupacaoPorHora
+            ocupacaoPorHora,
+            bloqueioPorHora
         };
     }
 

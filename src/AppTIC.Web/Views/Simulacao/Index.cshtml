@@ -16,8 +16,8 @@
     </div>
     <div class="sim-notice">
         <p>
-            Os horários são planeados, não posições em tempo real. O zonamento dos cais pode ser por região (a categoria da
-            circulação) ou por tempo de permanência (paragens rápidas junto à saída, esperas longas no fundo do canal).
+            Os horários são planeados, não posições em tempo real. O zonamento dos cais pode ser livre (qualquer cais, sem zonas),
+            por região (a categoria da circulação) ou por tempo de permanência (paragens rápidas junto à saída, esperas longas no fundo do canal).
             O plano do dia é calculado pelo Algoritmo de Otimização, que atribui cais ao maior número possível de autocarros.
             As categorias e as tipologias dos cais ficam guardadas neste browser; nada altera a operação nem a base de dados.
         </p>
@@ -34,18 +34,20 @@
             <div id="sim-config-categorias" class="sim-config-categorias"></div>
             <div class="sim-config-acoes">
                 <button id="sim-config-add" type="button"><i class="bi bi-plus-lg"></i> Adicionar categoria</button>
-                <label><input id="sim-config-ultimo" type="checkbox" /> Em último recurso, usar um cais livre de outra categoria</label>
+                <label id="sim-config-ultimo-campo"><input id="sim-config-ultimo" type="checkbox" /> Em último recurso, usar um cais livre de outra categoria</label>
                 <button id="sim-config-reset" type="button">Repor predefinições deste modo</button>
             </div>
-            <h3>Tipologia de cada cais</h3>
-            <div id="sim-config-cais" class="sim-config-cais"></div>
+            <div id="sim-config-cais-bloco">
+                <h3>Tipologia de cada cais</h3>
+                <div id="sim-config-cais" class="sim-config-cais"></div>
+            </div>
         </details>
     </div>
     <div class="sim-controls">
         <label>Data <input id="sim-date" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" /></label>
         <button id="sim-load" type="button"><i class="bi bi-arrow-clockwise"></i> Carregar</button>
         <label>Zonamento
-            <select id="sim-mode"><option value="Regiao">Por região</option><option value="Permanencia">Por tempo de permanência</option></select>
+            <select id="sim-mode"><option value="Livre">Livre (qualquer cais)</option><option value="Regiao">Por região</option><option value="Permanencia">Por tempo de permanência</option></select>
         </label>
         <button id="sim-plan" type="button" disabled><i class="bi bi-cpu"></i> Planear dia (Algoritmo de Otimização)</button>
         <button id="sim-play" type="button" disabled><i class="bi bi-play-fill"></i> Iniciar</button>
@@ -110,11 +112,28 @@
         <div class="sim-panel-heading sim-sub-heading"><h3>Entradas por hora</h3><span>altura = veículos que entram · traço = ocupação máxima dos cais nessa hora · vermelho = ocupação acima de 90 %</span></div>
         <div id="sim-kpi-horas" class="sim-kpi-horas" role="img" aria-label="Entradas e ocupação máxima por hora"></div>
     </section>
+    <section class="sim-panel sim-kpis sim-cmp">
+        <div class="sim-panel-heading">
+            <h2>Comparação de cenários · mesmo dia</h2>
+            <button id="sim-cmp-run" type="button" disabled><i class="bi bi-layout-three-columns"></i> Comparar cenários</button>
+        </div>
+        <p>
+            Planeia as mesmas circulações do dia com o Algoritmo de Otimização em três cenários: <strong>Livre</strong> (qualquer cais, sem zonas),
+            <strong>Zonas geográficas</strong> (zonamento por região) e <strong>Perto da saída</strong> (zonamento por tempo de permanência),
+            com as categorias configuradas acima. Cada plano é feito de raiz, sem cais atracados. ✓ assinala o melhor valor quando os cenários diferem;
+            a diferença é sempre face ao cenário Livre.
+        </p>
+        <div id="sim-cmp-nota" class="sim-cmp-nota" role="status" aria-live="polite">Carregue um dia e clique em Comparar cenários.</div>
+        <div id="sim-cmp-tabela" class="sim-cmp-tabela-wrap"></div>
+        <div class="sim-panel-heading sim-sub-heading"><h3>Bloqueio do canal por manobras, por hora (min)</h3><span id="sim-cmp-legenda" class="sim-cmp-legenda"></span></div>
+        <div id="sim-cmp-grafico" class="sim-cmp-grafico"></div>
+    </section>
 </div>
 
 @section Scripts {
     <script src="~/js/simulacao-planeador.js" asp-append-version="true"></script>
     <script src="~/js/simulacao-planta.js" asp-append-version="true"></script>
     <script src="~/js/simulacao-indicadores.js" asp-append-version="true"></script>
+    <script src="~/js/simulacao-comparacao.js" asp-append-version="true"></script>
     <script src="~/js/simulacao.js" asp-append-version="true"></script>
 }

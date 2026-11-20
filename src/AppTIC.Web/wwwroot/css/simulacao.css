@@ -100,3 +100,27 @@
 .sim-kpi-barra { width: 100%; background: #38bdf8; border-radius: .25rem .25rem 0 0; }
 .sim-kpi-barra.mau { background: #ef4444; }
 .sim-kpi-traco { position: absolute; left: 0; right: 0; height: 2px; background: #facc15; }
+.sim-cmp-nota { font-size: .78rem; color: #cbd5e1; margin-top: .5rem; }
+.sim-cmp-tabela-wrap { overflow-x: auto; margin-top: .6rem; }
+.sim-cmp-tabela { width: 100%; border-collapse: collapse; font-size: .8rem; }
+.sim-cmp-tabela th, .sim-cmp-tabela td { padding: .4rem .6rem; border-bottom: 1px solid #1e293b; text-align: left; vertical-align: top; }
+.sim-cmp-tabela thead th { color: #fff; font-weight: 600; border-bottom: 1px solid #334155; white-space: nowrap; }
+.sim-cmp-tabela thead small, .sim-cmp-tabela th[scope="row"] small { display: block; font-weight: 400; color: #94a3b8; font-size: .7rem; white-space: normal; }
+.sim-cmp-tabela th[scope="row"] { font-weight: 400; color: #e2e8f0; }
+.sim-cmp-tabela td strong { color: #e2e8f0; font-weight: 600; }
+.sim-cmp-tabela td small { display: block; color: #94a3b8; font-size: .7rem; }
+.sim-cmp-tabela td.melhor { background: rgba(34, 197, 94, .1); }
+.sim-cmp-tabela td.melhor strong { color: #fff; }
+.sim-cmp-tabela .sim-cmp-grupo { color: #bae6fd; text-transform: uppercase; letter-spacing: .04em; font-size: .72rem; padding-top: .8rem; }
+.sim-cmp-legenda { display: inline-flex; gap: .8rem; flex-wrap: wrap; }
+.sim-cmp-grafico { margin-top: .5rem; }
+.sim-cmp-svg { width: 100%; height: auto; display: block; }
+.sim-cmp-grelha { stroke: #1e293b; stroke-width: 1; }
+.sim-cmp-eixo { fill: #94a3b8; font-size: 11px; }
+.sim-cmp-rotulo { fill: #e2e8f0; font-size: 12px; }
+.sim-cmp-zona { fill: transparent; }
+.sim-cmp-zona:hover { fill: rgba(148, 163, 184, .12); }
+#sim-cmp-run { background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: .4rem; padding: .4rem .65rem; font-size: .8rem; }
+#sim-cmp-run:hover:not(:disabled) { background: #2563eb; }
+#sim-cmp-run:disabled { opacity: .5; }
+.sim-cmp-tabela thead small.sim-cmp-aviso { color: #fbbf24; }

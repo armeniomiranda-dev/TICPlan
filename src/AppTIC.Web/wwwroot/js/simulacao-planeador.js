@@ -9,6 +9,7 @@ const SimulacaoPlaneador = (() => {
 
     /**
      * Esquemas de zonamento por omissão. Cada esquema tem as categorias (tipologias) e a categoria de cada cais.
+     * - Livre: sem zonas; qualquer autocarro pode usar qualquer cais livre.
      * - Regiao: a categoria vem da circulação (Lisboa, Internacional, Norte, Comum).
      * - Permanencia: a categoria vem do tempo de paragem; as paragens rápidas ficam junto à saída e as
      *   esperas longas no fundo do canal, para não bloquearem a via com manobras.
@@ -19,6 +20,7 @@ const SimulacaoPlaneador = (() => {
         const porPermanencia = {};
         ordemSaida.forEach((id, i) => { porPermanencia[id] = i < 6 ? 'Rapida' : i < 11 ? 'Intermedia' : 'Espera'; });
         return {
+            Livre: esquemaLivre(),
             Regiao: {
                 criterio: 'Categoria',
                 ultimoRecurso: false,
@@ -40,6 +42,18 @@ const SimulacaoPlaneador = (() => {
                 ],
                 cais: porPermanencia
             }
+        };
+    }
+
+    /** Zonamento livre (modo da simulação e referência da comparação): uma só categoria com todos os cais e sem posição preferida. */
+    function esquemaLivre() {
+        const cais = {};
+        for (let n = 1; n <= TOTAL_CAIS; n++) cais[n] = 'Livre';
+        return {
+            criterio: 'Livre',
+            ultimoRecurso: false,
+            categorias: [{ id: 'Livre', nome: 'Livre', cor: '#94a3b8', reserva: false, preferencia: 'Nenhuma', ateMinutos: null }],
+            cais
         };
     }
 
@@ -116,7 +130,7 @@ const SimulacaoPlaneador = (() => {
 
     return {
         zonas, caisComuns, TOTAL_CAIS, ORDEM_SAIDA,
-        esquemasPorOmissao, categoriaDe, caisDaCategoria, opcoes, categoriaPorPermanencia, pedido, alocar
+        esquemasPorOmissao, esquemaLivre, categoriaDe, caisDaCategoria, opcoes, categoriaPorPermanencia, pedido, alocar
     };
 })();
 
