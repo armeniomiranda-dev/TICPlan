@@ -44,10 +44,13 @@ public class CaisService : ICaisService
 
     public IReadOnlyList<AlocacaoResposta>? AlocarCais(IReadOnlyList<AutocarroDto> autocarros)
     {
+        // 1. Criar o modelo / 2. Definir as variáveis / 3. Adicionar restrições (ver Construir)
         var (model, escolhas) = Construir(Regional(autocarros), obrigatorio: true);
-        // Os cais comuns só se usam quando os da zona estão ocupados.
+
+        // 4. Definir o objetivo: min Σ custo·x — os cais comuns só se usam quando os da zona estão ocupados.
         model.Minimize(LinearExpr.WeightedSum(escolhas.Select(e => (ILiteral)e.Escolhido), escolhas.Select(e => e.Custo)));
 
+        // 5. Criar o solver e resolver o modelo
         var solver = new CpSolver();
         var status = solver.Solve(model);
         if (status == CpSolverStatus.Infeasible)
@@ -64,11 +67,14 @@ public class CaisService : ICaisService
 
     public PlaneamentoDia? PlanearDia(PlaneamentoPedido pedido)
     {
+        // 1. Criar o modelo / 2. Definir as variáveis / 3. Adicionar restrições (ver Construir)
         var (model, escolhas) = Construir(pedido, obrigatorio: false);
         var literais = escolhas.Select(e => (ILiteral)e.Escolhido).ToList();
 
-        // 1.ª fase: o maior número possível de autocarros com cais.
+        // 4. Definir o objetivo (1.ª fase): max Σ x — o maior número possível de autocarros com cais.
         model.Maximize(LinearExpr.Sum(literais));
+
+        // 5. Criar o solver e resolver o modelo (1.ª fase)
         var solver = new CpSolver { StringParameters = "max_time_in_seconds:10 num_workers:8" };
         var status = solver.Solve(model);
         if (status == CpSolverStatus.Infeasible)
@@ -87,11 +93,16 @@ public class CaisService : ICaisService
             if (gulosa.Count(e => e) == comCaisNaFase1 && Custo(gulosa) <= Custo(escolhidos))
                 escolhidos = gulosa;
 
+            // 3. Adicionar restrições (2.ª fase): Σ x ≥ N* — não perder nenhum autocarro com cais da 1.ª fase.
             model.Add(LinearExpr.Sum(literais) >= comCaisNaFase1);
+            // Solução inicial (hint) para acelerar o resolvedor.
             for (var i = 0; i < escolhas.Count; i++)
                 model.AddHint(escolhas[i].Escolhido, escolhidos[i] ? 1 : 0);
+
+            // 4. Definir o objetivo (2.ª fase): min Σ custo·x — substitui o objetivo da 1.ª fase.
             model.Minimize(LinearExpr.WeightedSum(literais, escolhas.Select(e => e.Custo)));
 
+            // 5. Criar o solver e resolver o modelo (2.ª fase)
             var segunda = new CpSolver { StringParameters = "max_time_in_seconds:6 num_workers:8" };
             var statusCusto = segunda.Solve(model);
             if (statusCusto is CpSolverStatus.Optimal or CpSolverStatus.Feasible)
@@ -177,6 +188,7 @@ public class CaisService : ICaisService
     /// </summary>
     private static (CpModel Model, List<Escolha> Escolhas) Construir(PlaneamentoPedido pedido, bool obrigatorio)
     {
+        // 1. Criar o modelo
         var model = new CpModel();
         var intervalos = Enumerable.Range(1, TotalCais).ToDictionary(c => c, _ => new List<IntervalVar>());
         var escolhas = new List<Escolha>();
@@ -209,7 +221,10 @@ public class CaisService : ICaisService
                     _ => 0
                 };
 
+                // 2. Definir as variáveis
+                // x[a,c] ∈ {0,1}: 1 se o autocarro a fica no cais c.
                 var escolhido = model.NewBoolVar($"autocarro_{escolhas.Count}_cais_{cais}");
+                // Intervalo [chegada, partida) no cais c, que só existe quando x[a,c] = 1.
                 var intervalo = model.NewOptionalFixedSizeIntervalVar(
                     autocarro.ChegadaMinutos,
                     (long)autocarro.PartidaMinutos - autocarro.ChegadaMinutos,
@@ -218,11 +233,14 @@ public class CaisService : ICaisService
                 opcoes.Add(escolhido);
                 intervalos[cais].Add(intervalo);
                 escolhas.Add(new Escolha(indice, autocarro, cais, nivel * pesoNivel + preferencia, escolhido));
+
+                // 3. Adicionar restrições — cais fixo: x[a,c] = 0 para qualquer c diferente do fixo.
                 if (autocarro.CaisFixo is { } fixo && cais != fixo)
                     model.Add(escolhido == 0);
             }
 
-            // Um autocarro com cais fixo (já atracado) tem sempre de ficar com ele.
+            // 3. Adicionar restrições — um cais por autocarro:
+            //    obrigatório ou cais fixo (já atracado): Σ_c x[a,c] = 1; caso contrário: Σ_c x[a,c] ≤ 1.
             if (obrigatorio || autocarro.CaisFixo is not null)
             {
                 if (opcoes.Count == 0)
@@ -234,6 +252,7 @@ public class CaisService : ICaisService
                 model.AddAtMostOne(opcoes);
         }
 
+        // 3. Adicionar restrições — sem sobreposição: dois autocarros não ocupam o mesmo cais ao mesmo tempo.
         foreach (var intervalosCais in intervalos.Values)
             if (intervalosCais.Count > 1)
                 model.AddNoOverlap(intervalosCais);
