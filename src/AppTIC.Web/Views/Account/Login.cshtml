@@ -3,8 +3,11 @@
 <div class="row justify-content-center mt-5">
     <div class="col-sm-8 col-md-6 col-lg-4">
         <div class="card shadow-sm">
+            <div class="login-marca">
+                <img src="~/img/mobt-porto-branco.svg" alt="MOBT Porto" />
+                <h1 class="h5 mb-0 marca-app">MobtTIC</h1>
+            </div>
             <div class="card-body p-4">
-                <h1 class="h4 mb-4 text-center"><i class="bi bi-signpost-split text-primary"></i> AppTIC</h1>
                 <form asp-action="Login" method="post">
                     <input type="hidden" asp-for="ReturnUrl" />
                     <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2 small"></div>

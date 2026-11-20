@@ -1,4 +1,4 @@
-// Utilitários partilhados AppTIC.
+// Utilitários partilhados MobtTIC.
 window.appTic = {
     token: () => document.querySelector('meta[name="request-verification-token"]').content,
 

@@ -12,11 +12,16 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="request-verification-token" content="@Antiforgery.GetAndStoreTokens(Context).RequestToken" />
-    <title>@ViewData["Title"] · AppTIC</title>
+    <title>@ViewData["Title"] · MobtTIC</title>
+    <link rel="icon" type="image/png" href="~/img/mobt-icone.png" />
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/lib/bootstrap-icons/font/bootstrap-icons.min.css" />
     <link rel="stylesheet" href="https://cdn.syncfusion.com/ej2/@sfVersion/bootstrap5.3.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/mobt.css" asp-append-version="true" />
     <script src="https://cdn.syncfusion.com/ej2/@sfVersion/dist/ej2.min.js"></script>
     @* Licença para os controlos criados em JavaScript (ex.: gráfico da página inicial); a de Program.cs só cobre o servidor. *@
     @if (Config["Syncfusion:LicenseKey"] is { Length: > 0 } sfLicense)
@@ -27,9 +32,9 @@
 </head>
 <body>
     <header>
-        <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-3">
+        <nav class="navbar navbar-expand-lg navbar-dark navbar-mobt mb-3">
             <div class="container-fluid">
-                <a class="navbar-brand fw-semibold" asp-controller="Home" asp-action="Index"><i class="bi bi-signpost-split"></i> AppTIC</a>
+                <a class="navbar-brand" asp-controller="Home" asp-action="Index"><img src="~/img/mobt-porto-branco.svg" alt="MOBT Porto" /><span class="marca-app">MobtTIC</span></a>
                 @if (User.Identity?.IsAuthenticated == true)
                 {
                     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav" aria-controls="mainNav" aria-expanded="false" aria-label="Menu">
@@ -109,7 +114,7 @@
             @RenderBody()
         </main>
     </div>
-    <footer class="border-top text-muted small py-2 px-4">AppTIC &middot; Planeamento de circulações no TIC</footer>
+    <footer class="rodape-mobt small py-2 px-4"><img src="~/img/mobt-porto-branco.svg" alt="MOBT Porto" />MobtTIC &middot; Planeamento de circulações no TIC</footer>
 
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>

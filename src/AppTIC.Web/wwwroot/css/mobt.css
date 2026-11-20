@@ -1,0 +1,66 @@
+/* Identidade MOBT Porto (www.mobtporto.pt): preto #050505, verde "signal flow" #62FFC8,
+   verde de contraste #007A5A (texto/botões sobre branco) e cinzento estrutural #6F757D.
+   Tipos: Figtree (texto) e Space Grotesk (títulos). Carregado depois do Bootstrap. */
+:root {
+    --mobt-preto: #050505;
+    --mobt-verde: #62FFC8;
+    --mobt-verde-escuro: #007A5A;
+    --mobt-cinza: #6F757D;
+
+    --bs-primary: #007A5A;
+    --bs-primary-rgb: 0, 122, 90;
+    --bs-primary-text-emphasis: #00513c;
+    --bs-primary-bg-subtle: #e0fff4;
+    --bs-primary-border-subtle: #9fe8cf;
+    --bs-link-color: #007A5A;
+    --bs-link-color-rgb: 0, 122, 90;
+    --bs-link-hover-color: #00513c;
+    --bs-link-hover-color-rgb: 0, 81, 60;
+    --bs-secondary-color: rgba(5, 5, 5, .6);
+    --bs-body-color: #212529;
+    --bs-body-font-family: 'Figtree', system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    --bs-focus-ring-color: rgba(0, 122, 90, .25);
+}
+
+h1, h2, h3, h4, h5, h6, .h1, .h2, .h3, .h4, .h5, .h6, .navbar-brand, .card-header, .display-6 {
+    font-family: 'Space Grotesk', 'Figtree', sans-serif;
+}
+
+/* Barra de navegação preta com destaque verde. */
+.navbar-mobt { background: var(--mobt-preto); }
+.navbar-mobt .navbar-brand { display: flex; align-items: center; gap: .6rem; }
+.navbar-mobt .navbar-brand img { height: 30px; width: auto; }
+.navbar-mobt .marca-app { color: var(--mobt-verde); font-weight: 600; letter-spacing: .02em; padding-left: .6rem; border-left: 1px solid rgba(255, 255, 255, .3); }
+.navbar-mobt .nav-link { color: rgba(255, 255, 255, .8); }
+.navbar-mobt .nav-link:hover, .navbar-mobt .nav-link:focus { color: var(--mobt-verde); }
+.navbar-mobt .nav-link.active, .navbar-mobt .show > .nav-link { color: var(--mobt-verde); box-shadow: inset 0 -2px 0 var(--mobt-verde); }
+.navbar-mobt .dropdown-item.active, .navbar-mobt .dropdown-item:active { background: var(--mobt-verde); color: var(--mobt-preto); }
+
+/* Botões (o Bootstrap compila as cores, por isso redefinem-se aqui). */
+.btn-primary {
+    --bs-btn-bg: #007A5A; --bs-btn-border-color: #007A5A;
+    --bs-btn-hover-bg: #00654a; --bs-btn-hover-border-color: #00654a;
+    --bs-btn-active-bg: #00513c; --bs-btn-active-border-color: #00513c;
+    --bs-btn-disabled-bg: #007A5A; --bs-btn-disabled-border-color: #007A5A;
+    --bs-btn-focus-shadow-rgb: 0, 122, 90;
+}
+.btn-outline-primary {
+    --bs-btn-color: #007A5A; --bs-btn-border-color: #007A5A;
+    --bs-btn-hover-bg: #007A5A; --bs-btn-hover-border-color: #007A5A;
+    --bs-btn-active-bg: #007A5A; --bs-btn-active-border-color: #007A5A;
+    --bs-btn-disabled-color: #007A5A; --bs-btn-disabled-border-color: #007A5A;
+    --bs-btn-focus-shadow-rgb: 0, 122, 90;
+}
+.form-control:focus, .form-select:focus { border-color: #62d9ad; box-shadow: 0 0 0 .25rem rgba(0, 122, 90, .25); }
+.form-check-input:checked { background-color: #007A5A; border-color: #007A5A; }
+.nav-pills .nav-link.active { background: #007A5A; }
+.page-link { color: #007A5A; }
+.active > .page-link, .page-link.active { background: #007A5A; border-color: #007A5A; }
+.badge.text-bg-primary { background: #007A5A !important; }
+
+footer.rodape-mobt { background: var(--mobt-preto); color: rgba(255, 255, 255, .7); border: 0; margin-top: auto; }
+footer.rodape-mobt img { height: 16px; vertical-align: -3px; margin-right: .5rem; }
+
+.login-marca { background: var(--mobt-preto); border-radius: .375rem .375rem 0 0; padding: 1.5rem; text-align: center; }
+.login-marca img { height: 44px; }
+.login-marca .marca-app { display: block; color: var(--mobt-verde); font-family: 'Space Grotesk', sans-serif; font-weight: 600; margin-top: .5rem; }
