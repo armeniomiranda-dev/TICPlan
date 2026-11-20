@@ -1,0 +1,133 @@
+@using AppTIC.Web.Services
+@model FlixbusSnapshot
+@{
+    ViewData["Title"] = "Tempo real FlixBus";
+    var agora = DateTimeOffset.Now;
+}
+<div class="page-header">
+    <h1><i class="bi bi-broadcast"></i> Tempo real FlixBus – TIC Campanhã</h1>
+    <div class="text-muted small" id="tempo-real-hora">
+        @if (Model.ObtidoEm is { } obtido)
+        {
+            <span>Atualizado às @obtido.ToLocalTime().ToString("HH:mm:ss") · atualiza a cada 10 segundos</span>
+        }
+        else
+        {
+            <span>A aguardar a primeira leitura da FlixBus…</span>
+        }
+    </div>
+</div>
+
+<div id="tempo-real-erro">
+    @if (Model.Erro is { } erro)
+    {
+        <div class="alert alert-warning py-2"><i class="bi bi-exclamation-triangle"></i> @erro</div>
+    }
+</div>
+
+<div class="card mb-3">
+    <div class="card-header d-flex flex-wrap gap-3 align-items-center">
+        <span class="fw-semibold"><i class="bi bi-geo-alt"></i> Autocarros em viagem com passagem no TIC</span>
+        <span class="small d-flex flex-wrap gap-3 ms-auto">
+            <span><span class="legenda-veiculo" style="background:#0d6efd"></span> A caminho <span id="n-ACaminho" class="text-muted"></span></span>
+            <span><span class="legenda-veiculo" style="background:#198754"></span> No TIC <span id="n-NoTic" class="text-muted"></span></span>
+            <span><span class="legenda-veiculo" style="background:#6c757d"></span> Partiu <span id="n-Partiu" class="text-muted"></span></span>
+            <span><span class="legenda-veiculo" style="background:#fff;border:2px dashed #6c757d"></span> GPS desatualizado</span>
+        </span>
+    </div>
+    <div class="position-relative">
+        <div id="flixbus-mapa" style="height:480px"></div>
+        <div id="flixbus-popup" class="mapa-popup"></div>
+    </div>
+    <div class="card-footer small text-muted">Passe o rato sobre um autocarro para ver a viagem; clique para mostrar o traçado. Só aparecem viagens com hora no TIC entre 1h30 atrás e 3h à frente e com GPS disponível.</div>
+</div>
+
+<div class="row g-3" id="tempo-real-tabelas">
+    @foreach (var (titulo, icone, lista, extremo) in new[]
+    {
+        ("Chegadas", "bi-box-arrow-in-down-right", Model.Chegadas, "Origem"),
+        ("Partidas", "bi-box-arrow-up-right", Model.Partidas, "Destino")
+    })
+    {
+        <div class="col-xl-6">
+            <div class="card">
+                <div class="card-header fw-semibold"><i class="bi @icone"></i> @titulo <span class="badge bg-secondary">@lista.Count</span></div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0 align-middle">
+                        <thead>
+                            <tr>
+                                <th>Prevista</th>
+                                <th>Estimada</th>
+                                <th>Linha</th>
+                                <th>@extremo</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (lista.Count == 0)
+                            {
+                                <tr><td colspan="5" class="text-muted text-center">Sem viagens na janela atual.</td></tr>
+                            }
+                            @foreach (var p in lista)
+                            {
+                                var passada = p.Estimada < agora;
+                                var (classe, texto) = p switch
+                                {
+                                    { Cancelada: true } => ("bg-danger", "Cancelada"),
+                                    { AtrasoMinutos: null } => ("bg-light text-dark border", "Sem dados"),
+                                    { AtrasoMinutos: >= 15 } => ("bg-danger", $"+{p.AtrasoMinutos} min"),
+                                    { AtrasoMinutos: >= 3 } => ("bg-warning text-dark", $"+{p.AtrasoMinutos} min"),
+                                    { AtrasoMinutos: <= -2 } => ("bg-info text-dark", $"{p.AtrasoMinutos} min"),
+                                    _ => ("bg-success", "A horas")
+                                };
+                                <tr class="@(passada ? "text-muted" : "")" title="@p.Percurso">
+                                    <td class="@(p.Cancelada ? "text-decoration-line-through" : "")">@p.Planeada.ToString("HH:mm")</td>
+                                    <td class="fw-semibold">@(p.AtrasoMinutos is null || p.Cancelada ? "–" : p.Estimada.ToString("HH:mm"))</td>
+                                    <td class="text-nowrap">@p.Linha@(p.Viagem is { } v ? $" #{v}" : "")</td>
+                                    <td>@p.Extremo</td>
+                                    <td><span class="badge @classe">@texto</span></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+<p class="text-muted small mt-2">Fonte: API pública da FlixBus (horários por estação, com desvios em tempo real). Os dados também estão disponíveis em JSON em <code>/api/flixbus/tic</code>.</p>
+
+@section Head {
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.2.1/ol.css" />
+    <style>
+        .legenda-veiculo { display: inline-block; width: 12px; height: 12px; border-radius: 50%; vertical-align: -1px; }
+        .mapa-popup { position: absolute; display: none; pointer-events: none; z-index: 10; max-width: 340px;
+            background: #fff; border: 1px solid #ced4da; border-radius: .375rem; padding: .4rem .6rem; font-size: .8rem;
+            box-shadow: 0 .25rem .75rem rgba(0,0,0,.15); }
+    </style>
+}
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/ol@10.2.1/dist/ol.js"></script>
+    <script src="~/js/flixbus-mapa.js" asp-append-version="true"></script>
+    <script>
+        const INTERVALO = 10000;
+        flixbusMapa(document.getElementById('flixbus-mapa'), document.getElementById('flixbus-popup'), {
+            intervaloMs: INTERVALO,
+            onContagem: n => ['ACaminho', 'NoTic', 'Partiu'].forEach(s => document.getElementById('n-' + s).textContent = `(${n[s]})`)
+        });
+        // As tabelas são geradas no servidor: a cada 10 s pede a página de novo e troca só a hora, o aviso e as tabelas
+        // (sem recarregar, para o mapa não perder zoom nem seleção).
+        setInterval(async () => {
+            try {
+                const r = await fetch(location.href, { headers: { Accept: 'text/html' } });
+                if (!r.ok || r.redirected) return; // sessão expirada: mantém o que está
+                const doc = new DOMParser().parseFromString(await r.text(), 'text/html');
+                for (const id of ['tempo-real-hora', 'tempo-real-erro', 'tempo-real-tabelas']) {
+                    const novo = doc.getElementById(id), atual = document.getElementById(id);
+                    if (novo && atual) atual.replaceWith(novo);
+                }
+            } catch { /* mantém o último estado */ }
+        }, INTERVALO);
+    </script>
+}

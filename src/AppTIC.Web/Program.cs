@@ -77,6 +77,19 @@ builder.Services.AddScoped<OcupacaoTerminal>();
 builder.Services.AddScoped<SimulacaoService>();
 builder.Services.AddSingleton<ICaisService, CaisService>();
 builder.Services.AddSingleton<ITerminalStateStore, InMemoryTerminalStateStore>();
+
+// FlixBus em tempo real (chegadas/partidas no TIC), atualizado em segundo plano.
+builder.Services.Configure<FlixbusOptions>(builder.Configuration.GetSection(FlixbusOptions.Section));
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<FlixbusRealtimeStore>();
+builder.Services.AddHttpClient<FlixbusClient>((sp, http) =>
+{
+    var opt = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<FlixbusOptions>>().Value;
+    http.BaseAddress = new Uri(opt.BaseUrl.EndsWith('/') ? opt.BaseUrl : opt.BaseUrl + "/");
+    http.Timeout = TimeSpan.FromSeconds(20);
+    http.DefaultRequestHeaders.UserAgent.ParseAdd("AppTIC/1.0");
+});
+builder.Services.AddHostedService<FlixbusRealtimeWorker>();
 builder.Services.AddAntiforgery(options => options.HeaderName = "RequestVerificationToken");
 // PascalCase como nos controladores MVC: o simulacao.js lê Token, Mensagem, Alocacoes, etc.
 builder.Services.ConfigureHttpJsonOptions(options =>
@@ -199,6 +212,17 @@ terminalApi.MapPost("/partida/{id}", (string id, ITerminalStateStore store) =>
     store.MarcarPartida(id)
         ? Results.Ok(new { Mensagem = $"Autocarro {id} concluiu viagem e libertou o cais." })
         : Results.NotFound(new { Mensagem = "Autocarro não encontrado ou já concluído." }));
+
+// FlixBus em tempo real: último estado em cache (atualizado pelo FlixbusRealtimeWorker).
+app.MapGet("/api/flixbus/tic", (FlixbusRealtimeStore store) => Results.Ok(store.Atual))
+    .RequireAuthorization();
+
+// Traçado de uma viagem FlixBus (polylines codificadas), pedido pelo mapa ao clicar num autocarro.
+app.MapGet("/api/flixbus/rota/{rideUuid}", async (string rideUuid, FlixbusClient client, CancellationToken ct) =>
+    Guid.TryParse(rideUuid, out _)
+        ? Results.Ok(await client.ObterRotaAsync(rideUuid, ct))
+        : Results.BadRequest(new { Mensagem = "Identificador de viagem inválido." }))
+    .RequireAuthorization();
 
 await DbSeeder.SeedAsync(app.Services, app.Configuration);
 
